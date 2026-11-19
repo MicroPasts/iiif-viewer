@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IIIF Viewer — Presentation 2.0 &amp; 3.0 Sandbox</title>
+  </head>
+  <body class="bg-slate-100 text-slate-900 p-6 sm:p-8 font-sans">
+    <div class="max-w-6xl mx-auto space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 class="text-xl font-bold">IIIF Presentation 2.0 &amp; 3.0 Viewer</h1>
+          <p class="text-sm text-slate-600">Deep-zoom OpenSeadragon + Tailwind CSS v4 package</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <button
+            type="button"
+            data-preset="https://iiif.vam.ac.uk/collections/O24955/manifest.json"
+            class="px-3 py-1.5 font-semibold rounded-md bg-purple-600 text-white hover:bg-purple-500 transition"
+          >
+            V&amp;A Sculpture (v2)
+          </button>
+          <button
+            type="button"
+            data-preset="https://media.getty.edu/iiif/manifest/3/888f5484-9f14-4549-8d44-287a1d232cbf"
+            class="px-3 py-1.5 font-semibold rounded-md bg-slate-800 text-white hover:bg-slate-700 transition"
+          >
+            Getty Drawing (v3)
+          </button>
+          <button
+            type="button"
+            data-preset="https://iiif.io/api/cookbook/recipe/0009-book-1/manifest.json"
+            class="px-3 py-1.5 font-semibold rounded-md bg-slate-800 text-white hover:bg-slate-700 transition"
+          >
+            Multi-Page Book (v3)
+          </button>
+        </div>
+      </div>
+
+      <div id="iiif-viewer"></div>
+    </div>
+
+    <script type="module">
+      import { IIIFViewer } from './src/index.js';
+
+      const defaultManifest =
+        'https://iiif.vam.ac.uk/collections/O24955/manifest.json';
+
+      const viewer = new IIIFViewer('#iiif-viewer', {
+        manifestUrl: defaultManifest,
+        theme: 'dark',
+        height: '680px',
+      });
+
+      const presetButtons = document.querySelectorAll('[data-preset]');
+      presetButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          presetButtons.forEach((b) => {
+            b.classList.remove('bg-purple-600', 'hover:bg-purple-500');
+            b.classList.add('bg-slate-800', 'hover:bg-slate-700');
+          });
+          btn.classList.remove('bg-slate-800', 'hover:bg-slate-700');
+          btn.classList.add('bg-purple-600', 'hover:bg-purple-500');
+
+          viewer.loadManifest(btn.dataset.preset);
+        });
+      });
+    </script>
+  </body>
+</html>

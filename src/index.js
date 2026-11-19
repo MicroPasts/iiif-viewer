@@ -1,0 +1,323 @@
+import OpenSeadragon from 'openseadragon';
+import './style.css';
+import { parseIIIFManifest } from './parser.js';
+import {
+  renderShell,
+  renderMetadataTab,
+  renderStructuresTab,
+  renderAnnotationsTab,
+  escapeHtml,
+} from './template.js';
+
+export class IIIFViewer {
+  constructor(target, options = {}) {
+    this.container = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!this.container) {
+      throw new Error('IIIFViewer: Target container element not found.');
+    }
+
+    this.options = {
+      manifestUrl: options.manifestUrl || options.url || '',
+      manifest: options.manifest || options.data || null,
+      proxyUrl: options.proxyUrl || '',
+      theme: options.theme || 'dark',
+      showUrlInput: options.showUrlInput ?? true,
+      showSidebar: options.showSidebar ?? true,
+      height: options.height || '680px',
+      initialCanvas: options.initialCanvas || 0,
+      fetchOptions: options.fetchOptions || {},
+    };
+
+    this.state = {
+      theme: this.options.theme,
+      currentUrl: this.options.manifestUrl,
+      manifest: null,
+      canvasIndex: this.options.initialCanvas,
+      activeTab: 'metadata',
+      sidebarOpen: this.options.showSidebar,
+    };
+
+    this.osd = null;
+    this.mount();
+
+    if (this.options.manifest) {
+      this.setManifest(this.options.manifest);
+    } else if (this.options.manifestUrl) {
+      this.loadManifest(this.options.manifestUrl);
+    }
+  }
+
+  mount() {
+    this.wrapper = document.createElement('div');
+    this.wrapper.className = this.state.theme === 'dark' ? 'dark' : '';
+    this.wrapper.innerHTML = renderShell({
+      showUrlInput: this.options.showUrlInput,
+      currentUrl: this.state.currentUrl,
+      height: this.options.height,
+    });
+
+    this.container.innerHTML = '';
+    this.container.appendChild(this.wrapper);
+
+    if (!this.state.sidebarOpen) {
+      this.wrapper.querySelector('[data-el="sidebar"]')?.classList.add('hidden');
+    }
+
+    this.initOpenSeadragon();
+    this.bindEvents();
+    this.updateTabStyles();
+  }
+
+  initOpenSeadragon() {
+    const osdEl = this.wrapper.querySelector('[data-el="osd-container"]');
+    this.osd = OpenSeadragon({
+      element: osdEl,
+      showNavigationControl: false,
+      crossOriginPolicy: 'Anonymous',
+      animationTime: 0.4,
+      blendTime: 0.1,
+      maxZoomPixelRatio: 2.5,
+      visibilityRatio: 0.8,
+      constrainDuringPan: true,
+    });
+  }
+
+  bindEvents() {
+    this.wrapper.addEventListener('click', (e) => {
+      const actionEl = e.target.closest('[data-action]');
+      if (actionEl) {
+        const action = actionEl.dataset.action;
+        if (action === 'toggle-theme') this.toggleTheme();
+        if (action === 'toggle-sidebar') this.toggleSidebar();
+        if (action === 'zoom-in') this.osd?.viewport.zoomBy(1.4);
+        if (action === 'zoom-out') this.osd?.viewport.zoomBy(0.7);
+        if (action === 'zoom-home') this.osd?.viewport.goHome();
+        if (action === 'rotate') {
+          const current = this.osd?.viewport.getRotation() || 0;
+          this.osd?.viewport.setRotation((current + 90) % 360);
+        }
+        if (action === 'prev-canvas') this.goToCanvas(this.state.canvasIndex - 1);
+        if (action === 'next-canvas') this.goToCanvas(this.state.canvasIndex + 1);
+        return;
+      }
+
+      const tabEl = e.target.closest('[data-tab]');
+      if (tabEl) {
+        this.state.activeTab = tabEl.dataset.tab;
+        this.updateTabStyles();
+        this.renderSidebarContent();
+        return;
+      }
+
+      const canvasBtn = e.target.closest('[data-canvas-index]');
+      if (canvasBtn) {
+        this.goToCanvas(parseInt(canvasBtn.dataset.canvasIndex, 10));
+      }
+    });
+
+    const form = this.wrapper.querySelector('[data-el="url-form"]');
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const input = this.wrapper.querySelector('[data-el="url-input"]');
+        if (input?.value.trim()) {
+          this.loadManifest(input.value.trim());
+        }
+      });
+    }
+  }
+
+  // --- Public API ---
+
+  setTheme(theme) {
+    this.state.theme = theme === 'light' ? 'light' : 'dark';
+    this.wrapper.classList.toggle('dark', this.state.theme === 'dark');
+  }
+
+  toggleTheme() {
+    this.setTheme(this.state.theme === 'dark' ? 'light' : 'dark');
+  }
+
+  toggleSidebar() {
+    this.state.sidebarOpen = !this.state.sidebarOpen;
+    this.wrapper.querySelector('[data-el="sidebar"]')?.classList.toggle('hidden', !this.state.sidebarOpen);
+  }
+
+  async loadManifest(url) {
+    this.state.currentUrl = url;
+    const input = this.wrapper.querySelector('[data-el="url-input"]');
+    if (input) input.value = url;
+
+    this.setLoading(true);
+    this.setError(null);
+
+    try {
+      const fetchOpts = { ...this.options.fetchOptions };
+      // Avoid custom Accept headers unless explicitly passed so CORS preflight OPTIONS is skipped
+      if (this.options.fetchOptions.headers) {
+        fetchOpts.headers = this.options.fetchOptions.headers;
+      }
+
+      const targetUrl = this.options.proxyUrl
+        ? `${this.options.proxyUrl}${encodeURIComponent(url)}`
+        : url;
+
+      const res = await fetch(targetUrl, fetchOpts);
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      const json = await res.json();
+      this.setManifest(json);
+    } catch (err) {
+      const isCorsOrNetwork =
+        err instanceof TypeError && /fetch|network/i.test(err.message);
+      this.setError(
+        isCorsOrNetwork
+          ? `Network or CORS error fetching manifest from ${url}. Ensure the server allows cross-origin requests or configure proxyUrl.`
+          : err.message || 'Failed to load IIIF Manifest.'
+      );
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  setManifest(jsonOrString) {
+    try {
+      const raw = typeof jsonOrString === 'string' ? JSON.parse(jsonOrString) : jsonOrString;
+      const parsed = parseIIIFManifest(raw);
+      if (!parsed.canvases.length) {
+        throw new Error('Manifest contains no displayable canvases.');
+      }
+
+      this.state.manifest = parsed;
+      this.state.canvasIndex = Math.min(this.options.initialCanvas, parsed.canvases.length - 1);
+      this.setError(null);
+
+      this.wrapper.querySelector('[data-el="empty-state"]')?.classList.add('hidden');
+
+      const vBadge = this.wrapper.querySelector('[data-el="version-badge"]');
+      if (vBadge) {
+        vBadge.textContent = `v${parsed.version}`;
+        vBadge.classList.remove('hidden');
+      }
+
+      const titleEl = this.wrapper.querySelector('[data-el="manifest-title"]');
+      if (titleEl) titleEl.textContent = parsed.label;
+
+      this.renderFilmstrip();
+      this.goToCanvas(this.state.canvasIndex);
+    } catch (err) {
+      this.setError(err.message);
+    }
+  }
+
+  goToCanvas(index) {
+    const manifest = this.state.manifest;
+    if (!manifest || index < 0 || index >= manifest.canvases.length) return;
+
+    this.state.canvasIndex = index;
+    const canvas = manifest.canvases[index];
+
+    if (canvas.image.infoJsonUrl) {
+      this.osd.open(canvas.image.infoJsonUrl);
+    } else if (canvas.image.staticUrl) {
+      this.osd.open({ type: 'image', url: canvas.image.staticUrl });
+    }
+
+    const pager = this.wrapper.querySelector('[data-el="pager-controls"]');
+    const counter = this.wrapper.querySelector('[data-el="canvas-counter"]');
+    if (pager && counter) {
+      pager.classList.toggle('hidden', manifest.canvases.length <= 1);
+      counter.textContent = `${index + 1} / ${manifest.canvases.length}`;
+    }
+
+    this.highlightActiveThumbnail();
+    this.renderSidebarContent();
+  }
+
+  destroy() {
+    this.osd?.destroy();
+    this.container.innerHTML = '';
+  }
+
+  // --- Internal UI Helpers ---
+
+  updateTabStyles() {
+    this.wrapper.querySelectorAll('[data-tab]').forEach((btn) => {
+      const active = btn.dataset.tab === this.state.activeTab;
+      btn.className = active
+        ? 'flex-1 py-2.5 text-center border-b-2 border-purple-600 text-purple-700 dark:text-purple-400 font-semibold transition'
+        : 'flex-1 py-2.5 text-center border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition';
+    });
+  }
+
+  renderSidebarContent() {
+    const container = this.wrapper.querySelector('[data-el="sidebar-content"]');
+    const manifest = this.state.manifest;
+    if (!container || !manifest) return;
+
+    const currentCanvas = manifest.canvases[this.state.canvasIndex];
+
+    if (this.state.activeTab === 'metadata') {
+      container.innerHTML = renderMetadataTab(manifest, currentCanvas);
+    } else if (this.state.activeTab === 'structures') {
+      container.innerHTML = renderStructuresTab(manifest.structures, this.state.canvasIndex);
+    } else if (this.state.activeTab === 'annotations') {
+      container.innerHTML = renderAnnotationsTab(currentCanvas);
+    }
+  }
+
+  renderFilmstrip() {
+    const strip = this.wrapper.querySelector('[data-el="filmstrip"]');
+    const canvases = this.state.manifest?.canvases || [];
+    if (!strip) return;
+
+    if (canvases.length <= 1) {
+      strip.classList.add('hidden');
+      return;
+    }
+
+    strip.classList.remove('hidden');
+    strip.innerHTML = canvases
+      .map(
+        (c) => `
+        <button
+          type="button"
+          data-canvas-index="${c.index}"
+          title="${escapeHtml(c.label)}"
+          class="group relative h-18 w-16 shrink-0 rounded-md overflow-hidden border-2 border-transparent bg-slate-200 dark:bg-slate-800 transition focus:outline-hidden"
+        >
+          ${
+            c.image.thumbnail
+              ? `<img src="${escapeHtml(c.image.thumbnail)}" alt="${escapeHtml(c.label)}" class="w-full h-full object-cover" loading="lazy" />`
+              : `<span class="text-[10px] text-slate-500 p-1 block truncate">${escapeHtml(c.label)}</span>`
+          }
+          <span class="absolute bottom-0 inset-x-0 bg-slate-950/75 text-white text-[9px] font-mono px-1 truncate">
+            ${c.index + 1}
+          </span>
+        </button>`
+      )
+      .join('');
+  }
+
+  highlightActiveThumbnail() {
+    const strip = this.wrapper.querySelector('[data-el="filmstrip"]');
+    if (!strip) return;
+    strip.querySelectorAll('[data-canvas-index]').forEach((btn) => {
+      const idx = parseInt(btn.dataset.canvasIndex, 10);
+      btn.classList.toggle('border-purple-500', idx === this.state.canvasIndex);
+      btn.classList.toggle('border-transparent', idx !== this.state.canvasIndex);
+    });
+  }
+
+  setLoading(loading) {
+    this.wrapper.querySelector('[data-el="loading-box"]')?.classList.toggle('hidden', !loading);
+  }
+
+  setError(message) {
+    const box = this.wrapper.querySelector('[data-el="error-box"]');
+    if (!box) return;
+    box.textContent = message || '';
+    box.classList.toggle('hidden', !message);
+  }
+}
+
+export default IIIFViewer;
