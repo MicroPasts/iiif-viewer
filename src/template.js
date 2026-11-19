@@ -70,7 +70,7 @@ export function renderShell({ showUrlInput, currentUrl, height }) {
     : '';
 
   return `
-    <div style="height: ${escapeHtml(height)}; min-height: 540px;" class="w-full rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-lg flex flex-col overflow-hidden text-slate-800 dark:text-slate-200">
+    <div data-el="viewer-root" style="height: ${escapeHtml(height)}; min-height: 540px;" class="w-full rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-lg flex flex-col overflow-hidden text-slate-800 dark:text-slate-200">
       <!-- Top Bar -->
       <div class="shrink-0 flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
         <div class="flex items-center gap-2 min-w-0">
@@ -94,6 +94,15 @@ export function renderShell({ showUrlInput, currentUrl, height }) {
 
           <button type="button" data-action="toggle-sidebar" title="Toggle Info Panel" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition">
             Info
+          </button>
+
+          <button type="button" data-action="toggle-fullscreen" title="Toggle Fullscreen" aria-label="Toggle Fullscreen" class="p-1.5 rounded text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition">
+            <svg data-icon="enter-fullscreen" class="w-4 h-4 block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            </svg>
+            <svg data-icon="exit-fullscreen" class="w-4 h-4 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9V4H4m0 0l5 5M15 9V4h5m0 0l-5 5M9 15v5H4m0 0l5-5m6 0v5h5m0 0l-5-5" />
+            </svg>
           </button>
 
           <button type="button" data-action="toggle-theme" title="Toggle Light/Dark Mode" class="p-1.5 rounded text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition">

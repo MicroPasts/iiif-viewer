@@ -35,9 +35,13 @@ export class IIIFViewer {
       canvasIndex: this.options.initialCanvas,
       activeTab: 'metadata',
       sidebarOpen: this.options.showSidebar,
+      isFullscreen: false,
     };
 
     this.osd = null;
+    this._onFullscreenChange = this.handleFullscreenChange.bind(this);
+    this._onKeyDown = this.handleKeyDown.bind(this);
+
     this.mount();
 
     if (this.options.manifest) {
@@ -89,6 +93,7 @@ export class IIIFViewer {
         const action = actionEl.dataset.action;
         if (action === 'toggle-theme') this.toggleTheme();
         if (action === 'toggle-sidebar') this.toggleSidebar();
+        if (action === 'toggle-fullscreen') this.toggleFullscreen();
         if (action === 'zoom-in') this.osd?.viewport.zoomBy(1.4);
         if (action === 'zoom-out') this.osd?.viewport.zoomBy(0.7);
         if (action === 'zoom-home') this.osd?.viewport.goHome();
@@ -125,6 +130,88 @@ export class IIIFViewer {
         }
       });
     }
+
+    document.addEventListener('fullscreenchange', this._onFullscreenChange);
+    document.addEventListener('keydown', this._onKeyDown);
+  }
+
+  // --- Fullscreen Lifecycle ---
+
+  async enterFullscreen() {
+    if (this.state.isFullscreen) return;
+
+    if (this.wrapper.requestFullscreen && document.fullscreenEnabled) {
+      try {
+        await this.wrapper.requestFullscreen();
+        return;
+      } catch {
+        // Fall through to CSS fixed-viewport fallback if blocked (e.g., sandboxed iframe)
+      }
+    }
+
+    this.applyFullscreenStyles(true);
+  }
+
+  async exitFullscreen() {
+    if (!this.state.isFullscreen) return;
+
+    if (document.fullscreenElement === this.wrapper && document.exitFullscreen) {
+      try {
+        await document.exitFullscreen();
+        return;
+      } catch {
+        // Fall through to manual style reset
+      }
+    }
+
+    this.applyFullscreenStyles(false);
+  }
+
+  toggleFullscreen() {
+    if (this.state.isFullscreen) {
+      this.exitFullscreen();
+    } else {
+      this.enterFullscreen();
+    }
+  }
+
+  handleFullscreenChange() {
+    const active = document.fullscreenElement === this.wrapper;
+    this.applyFullscreenStyles(active);
+  }
+
+  handleKeyDown(e) {
+    if (e.key === 'Escape' && this.state.isFullscreen && !document.fullscreenElement) {
+      this.exitFullscreen();
+    }
+  }
+
+  applyFullscreenStyles(active) {
+    this.state.isFullscreen = active;
+    const root = this.wrapper.querySelector('[data-el="viewer-root"]');
+    const enterIcon = this.wrapper.querySelector('[data-icon="enter-fullscreen"]');
+    const exitIcon = this.wrapper.querySelector('[data-icon="exit-fullscreen"]');
+
+    if (root) {
+      if (active) {
+        this.wrapper.classList.add('fixed', 'inset-0', 'z-50');
+        root.style.height = '100vh';
+        root.classList.remove('rounded-xl', 'border');
+      } else {
+        this.wrapper.classList.remove('fixed', 'inset-0', 'z-50');
+        root.style.height = this.options.height;
+        root.classList.add('rounded-xl', 'border');
+      }
+    }
+
+    enterIcon?.classList.toggle('hidden', active);
+    exitIcon?.classList.toggle('hidden', !active);
+
+    // Recalculate OpenSeadragon viewport bounds after container resize
+    requestAnimationFrame(() => {
+      this.osd?.viewport?.resize();
+      this.osd?.viewport?.applyConstraints();
+    });
   }
 
   // --- Public API ---
@@ -153,7 +240,6 @@ export class IIIFViewer {
 
     try {
       const fetchOpts = { ...this.options.fetchOptions };
-      // Avoid custom Accept headers unless explicitly passed so CORS preflight OPTIONS is skipped
       if (this.options.fetchOptions.headers) {
         fetchOpts.headers = this.options.fetchOptions.headers;
       }
@@ -234,6 +320,11 @@ export class IIIFViewer {
   }
 
   destroy() {
+    document.removeEventListener('fullscreenchange', this._onFullscreenChange);
+    document.removeEventListener('keydown', this._onKeyDown);
+    if (this.state.isFullscreen) {
+      this.exitFullscreen();
+    }
     this.osd?.destroy();
     this.container.innerHTML = '';
   }
