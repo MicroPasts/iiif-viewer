@@ -25,6 +25,17 @@ export function extractLangValue(val, preferredLang = 'en') {
   return String(val);
 }
 
+function extractItemThumbnail(item) {
+  const thumbs = Array.isArray(item.thumbnail)
+    ? item.thumbnail
+    : item.thumbnail
+      ? [item.thumbnail]
+      : [];
+  const first = thumbs[0];
+  if (!first) return null;
+  return typeof first === 'string' ? first : first.id || first['@id'] || null;
+}
+
 function normalizeImageSource(canvas, isV3) {
   let serviceUrl = null;
   let staticUrl = null;
@@ -38,7 +49,9 @@ function normalizeImageSource(canvas, isV3) {
         (a) => a.motivation === 'painting' || (Array.isArray(a.motivation) && a.motivation.includes('painting'))
       );
       if (painting && painting.body) {
-        const body = Array.isArray(painting.body) ? painting.body[0] : painting.body;
+        const rawBody = Array.isArray(painting.body) ? painting.body[0] : painting.body;
+        const body = rawBody.type === 'SpecificResource' && rawBody.source ? rawBody.source : rawBody;
+
         staticUrl = body.id || null;
         width = width || body.width || null;
         height = height || body.height || null;
@@ -72,9 +85,10 @@ function normalizeImageSource(canvas, isV3) {
     }
   }
 
-  const thumbnail = serviceUrl
-    ? `${serviceUrl}/full/!200,200/0/default.jpg`
-    : staticUrl;
+  const explicitThumb = extractItemThumbnail(canvas);
+  const thumbnail =
+    explicitThumb ||
+    (serviceUrl ? `${serviceUrl}/full/!200,200/0/default.jpg` : staticUrl);
 
   return {
     serviceUrl,
@@ -83,6 +97,49 @@ function normalizeImageSource(canvas, isV3) {
     thumbnail,
     width,
     height,
+  };
+}
+
+function normalizeSceneSource(scene) {
+  let modelUrl = null;
+  let format = 'model/gltf-binary';
+  let transforms = [];
+
+  for (const page of scene.items || []) {
+    const annos = page.items || [];
+    for (const anno of annos) {
+      const isPainting =
+        anno.motivation === 'painting' ||
+        (Array.isArray(anno.motivation) && anno.motivation.includes('painting'));
+      if (!isPainting || !anno.body) continue;
+
+      const bodies = Array.isArray(anno.body) ? anno.body : [anno.body];
+      for (const rawBody of bodies) {
+        if (rawBody.type === 'SpecificResource' && rawBody.source) {
+          const src = Array.isArray(rawBody.source) ? rawBody.source[0] : rawBody.source;
+          if (src?.type === 'Model' || /\.(glb|gltf)(\?|$)/i.test(src?.id || '')) {
+            modelUrl = src.id || null;
+            format = src.format || format;
+            transforms = Array.isArray(rawBody.transform) ? rawBody.transform : [];
+            break;
+          }
+        } else if (rawBody.type === 'Model' || /\.(glb|gltf)(\?|$)/i.test(rawBody.id || '')) {
+          modelUrl = rawBody.id || null;
+          format = rawBody.format || format;
+          transforms = Array.isArray(rawBody.transform) ? rawBody.transform : [];
+          break;
+        }
+      }
+      if (modelUrl) break;
+    }
+    if (modelUrl) break;
+  }
+
+  return {
+    modelUrl,
+    format,
+    transforms,
+    thumbnail: extractItemThumbnail(scene),
   };
 }
 
@@ -99,11 +156,14 @@ function extractAnnotations(canvas, isV3) {
           .filter(Boolean)
           .join(' ');
         if (text) {
+          const targetStr = typeof anno.target === 'string' ? anno.target : anno.target?.id || '';
+          const xywhMatch = targetStr.match(/#xywh=([0-9,.-]+)/);
           results.push({
             id: anno.id || '',
             motivation: Array.isArray(anno.motivation) ? anno.motivation.join(', ') : anno.motivation || 'commenting',
             text,
-            target: typeof anno.target === 'string' ? anno.target : anno.target?.id || '',
+            target: targetStr,
+            xywh: xywhMatch ? xywhMatch[1].split(',').map(Number) : null,
           });
         }
       });
@@ -118,6 +178,7 @@ function extractAnnotations(canvas, isV3) {
             motivation: res.motivation || 'sc:painting',
             text: chars,
             target: res.on || '',
+            xywh: null,
           });
         }
       });
@@ -133,7 +194,9 @@ export function parseIIIFManifest(manifest) {
   }
 
   const contextStr = JSON.stringify(manifest['@context'] || '');
+  const isV4 = contextStr.includes('/presentation/4/');
   const isV3 =
+    isV4 ||
     contextStr.includes('/presentation/3/') ||
     manifest.type === 'Manifest' ||
     Array.isArray(manifest.items);
@@ -156,21 +219,62 @@ export function parseIIIFManifest(manifest) {
     value: extractLangValue(entry.value),
   }));
 
-  const rawCanvases = isV3
+  const seeAlso = (Array.isArray(manifest.seeAlso) ? manifest.seeAlso : manifest.seeAlso ? [manifest.seeAlso] : [])
+    .map((item) => ({
+      id: item.id || item['@id'] || '',
+      label: extractLangValue(item.label) || item.format || 'Related Resource',
+      format: item.format || '',
+    }))
+    .filter((s) => s.id);
+
+  const homepage = (Array.isArray(manifest.homepage) ? manifest.homepage : manifest.homepage ? [manifest.homepage] : [])
+    .map((item) => ({
+      id: item.id || item['@id'] || '',
+      label: extractLangValue(item.label) || 'Record Homepage',
+    }))
+    .filter((h) => h.id);
+
+  const rawItems = isV3
     ? manifest.items || []
     : manifest.sequences?.[0]?.canvases || [];
 
-  const canvases = rawCanvases.map((c, index) => {
-    const canvasId = c.id || c['@id'] || `canvas-${index}`;
-    const image = normalizeImageSource(c, isV3);
-    const annotations = extractAnnotations(c, isV3);
+  const canvases = rawItems.map((c, index) => {
+    const itemId = c.id || c['@id'] || `canvas-${index}`;
+    const isScene = c.type === 'Scene';
 
+    if (isScene) {
+      const scene = normalizeSceneSource(c);
+      return {
+        index,
+        kind: 'scene',
+        id: itemId,
+        label: extractLangValue(c.label) || `3D Scene ${index + 1}`,
+        image: {
+          serviceUrl: null,
+          infoJsonUrl: null,
+          staticUrl: null,
+          thumbnail: scene.thumbnail,
+          width: null,
+          height: null,
+        },
+        scene,
+        annotations: extractAnnotations(c, isV3),
+        metadata: (c.metadata || []).map((m) => ({
+          label: extractLangValue(m.label),
+          value: extractLangValue(m.value),
+        })),
+      };
+    }
+
+    const image = normalizeImageSource(c, isV3);
     return {
       index,
-      id: canvasId,
+      kind: 'canvas',
+      id: itemId,
       label: extractLangValue(c.label) || `Canvas ${index + 1}`,
       image,
-      annotations,
+      scene: null,
+      annotations: extractAnnotations(c, isV3),
       metadata: (c.metadata || []).map((m) => ({
         label: extractLangValue(m.label),
         value: extractLangValue(m.value),
@@ -178,7 +282,6 @@ export function parseIIIFManifest(manifest) {
     };
   });
 
-  // Parse structures / ranges (Table of Contents)
   const canvasIndexById = new Map(canvases.map((c) => [c.id.split('#')[0], c.index]));
   const structures = (manifest.structures || [])
     .filter((s) => !(s.behavior || []).includes('top'))
@@ -198,14 +301,18 @@ export function parseIIIFManifest(manifest) {
     })
     .filter((s) => s.canvasIndex !== null);
 
+  const hasScenes = canvases.some((c) => c.kind === 'scene');
+
   return {
-    version: isV3 ? '3.0' : '2.1',
+    version: isV4 || hasScenes ? '4.0' : isV3 ? '3.0' : '2.1',
     id,
     label,
     summary,
     attribution,
     rights,
     metadata,
+    seeAlso,
+    homepage,
     canvases,
     structures,
   };

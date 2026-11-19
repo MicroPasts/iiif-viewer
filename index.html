@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>IIIF Viewer — Presentation 2.0 &amp; 3.0 Sandbox</title>
+    <title>IIIF Viewer — Presentation 2.0, 3.0 &amp; 4.0 Sandbox</title>
   </head>
   <body class="bg-slate-100 text-slate-900 p-6 sm:p-8 font-sans">
     <div class="max-w-6xl mx-auto space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 class="text-xl font-bold">IIIF Presentation 2.0 &amp; 3.0 Viewer</h1>
-          <p class="text-sm text-slate-600">Deep-zoom OpenSeadragon + Tailwind CSS v4 package</p>
+          <h1 class="text-xl font-bold">IIIF Presentation 2.0, 3.0 &amp; 4.0 Viewer</h1>
+          <p class="text-sm text-slate-600">Deep-zoom OpenSeadragon, 3D Scene &amp; Tailwind CSS v4 package</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2 text-xs">
@@ -20,6 +20,13 @@
             class="px-3 py-1.5 font-semibold rounded-md bg-purple-600 text-white hover:bg-purple-500 transition"
           >
             V&amp;A Sculpture (v2)
+          </button>
+          <button
+            type="button"
+            data-preset="https://iiif.io/api/cookbook/recipe/0608-mvm-3d/v4/manifest.json"
+            class="px-3 py-1.5 font-semibold rounded-md bg-slate-800 text-white hover:bg-slate-700 transition"
+          >
+            3D Model (v4)
           </button>
           <button
             type="button"
@@ -51,6 +58,13 @@
         manifestUrl: defaultManifest,
         theme: 'dark',
         height: '680px',
+        // Rewrites local Laravel asset/manifest URLs to Vite's same-origin dev proxy
+        proxyRoutes: window.location.hostname === 'localhost'
+          ? {
+              'http://localhost:8000/images': '/images',
+              'http://localhost:8000/finds': '/finds',
+            }
+          : null,
       });
 
       const presetButtons = document.querySelectorAll('[data-preset]');

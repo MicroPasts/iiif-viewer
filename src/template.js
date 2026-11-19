@@ -84,8 +84,8 @@ export function renderShell({ showUrlInput, currentUrl, height }) {
         ${urlBar}
 
         <div class="flex items-center gap-1.5">
-          <!-- Zoom Controls -->
-          <div class="inline-flex rounded-md bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 divide-x divide-slate-200 dark:divide-slate-700">
+          <!-- Zoom Controls (2D Canvas) -->
+          <div data-el="zoom-controls" class="inline-flex rounded-md bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 divide-x divide-slate-200 dark:divide-slate-700">
             <button type="button" data-action="zoom-in" title="Zoom In" class="px-2 py-1 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition">+</button>
             <button type="button" data-action="zoom-out" title="Zoom Out" class="px-2 py-1 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition">&minus;</button>
             <button type="button" data-action="zoom-home" title="Reset View" class="px-2 py-1 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition">Reset</button>
@@ -118,9 +118,10 @@ export function renderShell({ showUrlInput, currentUrl, height }) {
 
       <!-- Main Workspace -->
       <div class="relative flex-1 min-h-0 flex overflow-hidden">
-        <!-- Deep Zoom Canvas -->
+        <!-- Deep Zoom 2D & 3D Viewport -->
         <div class="relative flex-1 min-w-0 bg-slate-100 dark:bg-slate-950 flex flex-col">
           <div data-el="osd-container" class="w-full h-full"></div>
+          <div data-el="scene-container" class="hidden w-full h-full overflow-hidden"></div>
 
           <!-- Loading Overlay -->
           <div data-el="loading-box" class="hidden absolute inset-0 z-20 flex items-center justify-center bg-white/85 dark:bg-slate-950/85 backdrop-blur-xs text-sm font-medium text-slate-600 dark:text-slate-300">
@@ -133,7 +134,7 @@ export function renderShell({ showUrlInput, currentUrl, height }) {
           <!-- Empty State -->
           <div data-el="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-center p-6 text-sm text-slate-500 dark:text-slate-400">
             <p class="font-medium">No IIIF Manifest loaded</p>
-            <p class="text-xs mt-1">Enter a IIIF Presentation 2.0 or 3.0 manifest URL above or call <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800">loadManifest()</code>.</p>
+            <p class="text-xs mt-1">Enter a IIIF Presentation 2.0, 3.0, or 4.0 manifest URL above or call <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800">loadManifest()</code>.</p>
           </div>
 
           <!-- Prev / Next Canvas Floating Controls -->
@@ -155,7 +156,7 @@ export function renderShell({ showUrlInput, currentUrl, height }) {
         </aside>
       </div>
 
-      <!-- Bottom Thumbnail Strip (shown for multi-canvas manifests) -->
+      <!-- Bottom Thumbnail Strip (shown for multi-canvas / 2D+3D manifests) -->
       <div data-el="filmstrip" class="hidden iiif-scroll shrink-0 h-24 px-3 py-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center gap-2.5 overflow-x-auto"></div>
     </div>
   `;
@@ -167,10 +168,28 @@ export function renderMetadataTab(manifest, currentCanvas) {
       (m) => `
       <div class="border-b border-slate-100 dark:border-slate-800/80 pb-2">
         <dt class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">${escapeHtml(m.label)}</dt>
-        <dd class="text-slate-800 dark:text-slate-200 mt-0.5 break-words [&_p]:mb-1.5 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4">${sanitizeHtml(m.value)}</dd>
+        <dd class="text-slate-800 dark:text-slate-200 mt-0.5 break-words whitespace-pre-line [&_p]:mb-1.5 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4">${sanitizeHtml(m.value)}</dd>
       </div>`
     )
     .join('');
+
+  const links = [...(manifest.homepage || []), ...(manifest.seeAlso || [])];
+  const linksHtml = links.length
+    ? `<div class="space-y-1.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Related Endpoints</span>
+        <div class="flex flex-col gap-1">
+          ${links
+            .map(
+              (l) => `
+              <a href="${escapeHtml(l.id)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-between gap-2 px-2.5 py-1.5 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-cyan-700 dark:text-cyan-400 hover:border-cyan-500/50 transition">
+                <span class="truncate font-medium">${escapeHtml(l.label)}</span>
+                <span class="text-[10px] font-mono text-slate-400 shrink-0">&nearr;</span>
+              </a>`
+            )
+            .join('')}
+        </div>
+      </div>`
+    : '';
 
   return `
     <div class="space-y-3">
@@ -182,8 +201,17 @@ export function renderMetadataTab(manifest, currentCanvas) {
       ${
         currentCanvas
           ? `<div class="p-2.5 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/50">
-              <span class="text-[10px] font-semibold uppercase tracking-wider text-purple-700 dark:text-purple-400 block">Current Canvas</span>
-              <span class="font-medium text-slate-900 dark:text-slate-100">${escapeHtml(currentCanvas.label)}</span>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-[10px] font-semibold uppercase tracking-wider text-purple-700 dark:text-purple-400">
+                  ${currentCanvas.kind === 'scene' ? 'Current 3D Scene' : 'Current Canvas'}
+                </span>
+                ${
+                  currentCanvas.kind === 'scene'
+                    ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">GLB / 3D</span>`
+                    : ''
+                }
+              </div>
+              <span class="font-medium text-slate-900 dark:text-slate-100 block mt-0.5">${escapeHtml(currentCanvas.label)}</span>
               ${
                 currentCanvas.image.width && currentCanvas.image.height
                   ? `<span class="block text-[10px] font-mono text-slate-500 mt-0.5">${currentCanvas.image.width} &times; ${currentCanvas.image.height} px</span>`
@@ -194,6 +222,8 @@ export function renderMetadataTab(manifest, currentCanvas) {
       }
 
       ${metaRows ? `<dl class="space-y-2.5">${metaRows}</dl>` : ''}
+
+      ${linksHtml}
 
       ${
         manifest.attribution
@@ -257,9 +287,12 @@ export function renderAnnotationsTab(currentCanvas) {
         .map(
           (a) => `
           <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1">
-            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
-              ${escapeHtml(a.motivation)}
-            </span>
+            <div class="flex items-center justify-between gap-2">
+              <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                ${escapeHtml(a.motivation)}
+              </span>
+              ${a.xywh ? `<span class="text-[10px] font-mono text-slate-400">xywh: ${a.xywh.join(',')}</span>` : ''}
+            </div>
             <div class="text-slate-800 dark:text-slate-200 leading-relaxed [&_p]:mb-1.5 [&_p:last-child]:mb-0">${sanitizeHtml(a.text)}</div>
           </div>`
         )

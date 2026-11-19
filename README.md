@@ -1,42 +1,57 @@
 # IIIF Viewer (`@micropasts/iiif-viewer`)
 
-A standalone, framework-agnostic deep-zoom viewer for **IIIF Presentation API 2.0/2.1 and 3.0** manifests and cultural heritage collections.
-
-Built on **OpenSeadragon** and bundled **Tailwind CSS v4**—requiring no external CDN scripts or host-framework CSS setup.
+A lightweight, framework-agnostic **IIIF Presentation API 2.0, 3.0 & 4.0** viewer built with **OpenSeadragon**, **Three.js**, and **Tailwind CSS v4**. Designed for museums, archives, libraries, and digital heritage platforms to display deep-zoom 2D canvases, interactive 3D `.glb`/`.gltf` scenes, structural tables of contents, sanitized HTML metadata, and Web Annotations without external CDN bloat.
 
 * **Live Demo:** https://micropasts.github.io/iiif-viewer/
 * **Repository:** https://github.com/micropasts/iiif-viewer
 * **Author:** Daniel Pett ([MicroPasts](https://github.com/micropasts))
 
+### Screenshot of interface
+
+![A screenshot of how the iiif viewer looks](./images/screenshot-iiif.png)
+
 ## Features
 
-* **IIIF Presentation 2.0 & 3.0 Support:** Automatically detects and normalizes both IIIF Presentation 2.0/2.1 (`sequences` / `canvases` / `@id`) and Presentation 3.0 (`items` / `AnnotationPage` / language maps) manifests.
-* **Deep-Zoom OpenSeadragon Canvas:** Supports tiled IIIF Image API 2.0 & 3.0 (`info.json`) endpoints with smooth pan, zoom, reset, and 90° rotation controls, plus automatic fallback to static image URLs when no tile service is defined.
-* **Multi-Canvas Navigation & Filmstrip:** Includes floating previous/next canvas pagination (`1 / N`) and a scrollable bottom thumbnail strip for multi-page books, manuscripts, and multi-angle object photography.
-* **Synchronized Sidebar Inspector:**
-  * **Metadata Tab:** Displays manifest-level and active-canvas metadata, summaries, attribution statements, and license/rights links with safe HTML sanitization (`sanitizeHtml`) for formatted descriptions and external links.
-  * **Index Tab:** Renders structural `structures` / `ranges` (table of contents) for one-click navigation to specific pages or sections.
-  * **Notes Tab:** Displays canvas-level Web Annotations and transcriptions (`painting`, `commenting`, `transcribing`).
-* **CORS-Friendly Fetching & Proxy Support:** Sends simple `GET` requests by default to avoid triggering unnecessary CORS preflight `OPTIONS` rejections on museum servers, with optional `proxyUrl` and `fetchOptions` configuration.
-* **Scoped Light & Dark Mode:** Bundled Tailwind CSS with a built-in header theme toggle scoped to the viewer wrapper so it operates independently of your host application's theme.
+* **IIIF Presentation 2.0, 3.0 & 4.0 Support:** Automatically detects and normalizes Presentation 2.x (`sequences`/`canvases`), Presentation 3.0 (`items`/`AnnotationPage`), and Presentation 4.0 (`Scene`/`Model`/`SpecificResource`) manifests.
+* **Deep-Zoom 2D & Interactive 3D in One Filmstrip:** Seamlessly switches between OpenSeadragon tiled/static 2D images and a built-in Three.js WebGL 3D scene viewer (`GLTFLoader` + `DRACOLoader`) with camera reset, auto-rotate, wireframe, raking light, local `.glb` file picker, and IIIF `RotateTransform` / `ScaleTransform` / `TranslateTransform` support.
+* **Configurable Proxy Routing:** Route manifests and downstream assets (`info.json`, static images, `.glb` models, thumbnails) through custom prefixes, regex rules, functions, or CORS proxy endpoints via `proxyRoutes`, `proxyUrl`, and `assetProxyUrl`.
+* **Safe HTML Metadata Rendering:** Sanitizes HTML inside manifest metadata values, summaries, attributions, and annotations—preserving formatting and safe links while stripping unsafe scripts or attributes.
+* **Fullscreen & Scoped Dark/Light Themes:** Built-in Fullscreen API support (with a fixed-viewport fallback for sandboxed iframes) and isolated `.dark` class theming.
+
+---
 
 ## Installation
 
-Install the package via npm:
+### From npm
 
 ```bash
 npm install @micropasts/iiif-viewer
 ```
 
+### From GitHub Packages
+
+Add a `.npmrc` file in your project root:
+
+```ini
+@micropasts:registry=https://npm.pkg.github.com
+```
+
+Then install:
+
+```bash
+npm install @micropasts/iiif-viewer
+```
+
+---
+
 ## Quick Start
 
-Import both the `IIIFViewer` class and its bundled stylesheet:
+### Vanilla JS / ES Modules
 
 ```javascript
 import { IIIFViewer } from '@micropasts/iiif-viewer';
 import '@micropasts/iiif-viewer/style.css';
 
-// Initialize the viewer from a IIIF Presentation 2.0 or 3.0 manifest URL
 const viewer = new IIIFViewer('#iiif-viewer', {
   manifestUrl: 'https://iiif.vam.ac.uk/collections/O24955/manifest.json',
   theme: 'dark',
@@ -50,52 +65,50 @@ Ensure your HTML contains the target mount element:
 <div id="iiif-viewer"></div>
 ```
 
-## How It Works
+### Using Custom Proxy Routes (Local Dev / CORS Bypass)
 
-When a manifest is passed via `manifestUrl` or `setManifest()`, `parseIIIFManifest()` normalizes version-specific IIIF structures into a unified internal model:
-
-1. **Version & Language Map Normalization:** Inspects `@context`, `type`, and `items` vs. `sequences` to distinguish Presentation 3.0 from 2.x, resolving language maps (`{ "en": ["..."] }`, `@language`/`@value` arrays, and plain strings) via `extractLangValue()`.
-2. **Canvas & Image Service Extraction:** Resolves painting annotations on each canvas to locate the IIIF Image API service endpoint (`info.json`) for deep tile zooming, generates `!200,200` thumbnails for the filmstrip, and falls back to direct static image URLs if no image service is advertised.
-3. **HTML Sanitization:** Metadata values, summaries, attribution statements, and annotations often contain embedded HTML (`<a>`, `<p>`, `<br>`, `<em>`, `<ul>`). Before rendering into the sidebar, `sanitizeHtml()` strips disallowed tags and attributes while preserving safe formatting and enforcing `target="_blank" rel="noopener noreferrer"` on links.
-4. **Structural Ranges & Annotations:** Maps `structures` ranges back to canvas indices for the **Index** tab and extracts canvas-attached `annotations` (v3) or `otherContent` (v2) for the **Notes** tab.
-
-## Usage Patterns
-
-### 1. Load from a Pre-Parsed Manifest Object or JSON String
-
-Pass a manifest object or JSON string directly via `manifest` (or `data`) at initialization, or update an active viewer with `setManifest()`:
-
-```javascript
-import { IIIFViewer } from '@micropasts/iiif-viewer';
-import '@micropasts/iiif-viewer/style.css';
-
-const viewer = new IIIFViewer('#iiif-viewer', {
-  manifest: myManifestObject,
-  showUrlInput: false,
-  theme: 'light',
-});
-
-// Swap in a different manifest later
-viewer.setManifest(anotherManifestObject);
-```
-
-### 2. Using a CORS Proxy or Custom Fetch Options
-
-For IIIF endpoints that omit `Access-Control-Allow-Origin` headers on manifest JSON files, configure `proxyUrl` or pass custom `fetchOptions`:
+When a manifest contains embedded asset URLs pointing to a local dev server (such as `http://localhost:8000/images/...`) or an origin lacking `Access-Control-Allow-Origin` headers, configure `proxyRoutes`, `proxyUrl`, or `assetProxyUrl`:
 
 ```javascript
 const viewer = new IIIFViewer('#iiif-viewer', {
-  manifestUrl: 'https://example.org/iiif/manifest.json',
-  proxyUrl: 'https://cors-proxy.example.org/?url=',
-  fetchOptions: {
-    credentials: 'same-origin',
+  manifestUrl: 'http://localhost:8000/finds/1704/iiif/manifest',
+  // Prefix map rewriting both manifest and embedded .glb / image URLs
+  proxyRoutes: {
+    'http://localhost:8000/images': '/images',
+    'http://localhost:8000/finds': '/finds',
   },
 });
 ```
 
-### 3. Framework Integration Examples
+You can also pass an array of `{ match, replace, types }` rules or a resolver function:
 
-#### Vanilla HTML / UMD Script Tag
+```javascript
+const viewer = new IIIFViewer('#iiif-viewer', {
+  manifestUrl: 'https://example.org/iiif/manifest.json',
+  proxyRoutes: (url, resourceType) => {
+    if (resourceType === 'model' && url.startsWith('http://localhost:8000/')) {
+      return `/api/proxy-glb?url=${encodeURIComponent(url)}`;
+    }
+    return url;
+  },
+});
+```
+
+### Passing an Inline Manifest Object
+
+```javascript
+const viewer = new IIIFViewer('#iiif-viewer', {
+  manifest: myManifestJsonObject,
+  theme: 'light',
+  showUrlInput: false,
+});
+```
+
+---
+
+## Framework Integration Examples
+
+### UMD Script Tag
 
 ```html
 <link rel="stylesheet" href="./node_modules/@micropasts/iiif-viewer/dist/iiif-viewer.css" />
@@ -104,48 +117,49 @@ const viewer = new IIIFViewer('#iiif-viewer', {
 <script src="./node_modules/@micropasts/iiif-viewer/dist/iiif-viewer.umd.cjs"></script>
 <script>
   const viewer = new IIIFViewer.IIIFViewer('#iiif-viewer', {
-    manifestUrl: 'https://media.getty.edu/iiif/manifest/3/888f5484-9f14-4549-8d44-287a1d232cbf',
+    manifestUrl: 'https://iiif.io/api/cookbook/recipe/0608-mvm-3d/v4/manifest.json',
   });
 </script>
 ```
 
-#### React
+### React
 
 ```jsx
 import { useEffect, useRef } from 'react';
 import { IIIFViewer } from '@micropasts/iiif-viewer';
 import '@micropasts/iiif-viewer/style.css';
 
-export function CulturalObjectViewer({ manifestUrl, theme = 'dark' }) {
+export function MuseumIIIFViewer({ manifestUrl, theme = 'dark', proxyRoutes = null }) {
   const containerRef = useRef(null);
-  const viewerRef = useRef(null);
+  const instanceRef = useRef(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
-    viewerRef.current = new IIIFViewer(containerRef.current, {
+    instanceRef.current = new IIIFViewer(containerRef.current, {
       manifestUrl,
       theme,
+      proxyRoutes,
     });
-    return () => viewerRef.current?.destroy();
+
+    return () => {
+      instanceRef.current?.destroy();
+      instanceRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
-    if (viewerRef.current && manifestUrl) {
-      viewerRef.current.loadManifest(manifestUrl);
-    }
+    if (manifestUrl) instanceRef.current?.loadManifest(manifestUrl);
   }, [manifestUrl]);
 
   useEffect(() => {
-    if (viewerRef.current) {
-      viewerRef.current.setTheme(theme);
-    }
+    if (instanceRef.current) instanceRef.current.setTheme(theme);
   }, [theme]);
 
   return <div ref={containerRef} />;
 }
 ```
 
-#### Vue 3
+### Vue 3
 
 ```vue
 <script setup>
@@ -154,8 +168,9 @@ import { IIIFViewer } from '@micropasts/iiif-viewer';
 import '@micropasts/iiif-viewer/style.css';
 
 const props = defineProps({
-  manifestUrl: String,
+  manifestUrl: { type: String, required: true },
   theme: { type: String, default: 'dark' },
+  proxyRoutes: { type: [Object, Array, Function], default: null },
 });
 
 const container = ref(null);
@@ -165,20 +180,14 @@ onMounted(() => {
   viewer = new IIIFViewer(container.value, {
     manifestUrl: props.manifestUrl,
     theme: props.theme,
+    proxyRoutes: props.proxyRoutes,
   });
 });
 
-watch(() => props.manifestUrl, (newUrl) => {
-  if (viewer && newUrl) viewer.loadManifest(newUrl);
-});
+watch(() => props.manifestUrl, (url) => url && viewer?.loadManifest(url));
+watch(() => props.theme, (theme) => viewer?.setTheme(theme));
 
-watch(() => props.theme, (newTheme) => {
-  if (viewer) viewer.setTheme(newTheme);
-});
-
-onBeforeUnmount(() => {
-  viewer?.destroy();
-});
+onBeforeUnmount(() => viewer?.destroy());
 </script>
 
 <template>
@@ -186,49 +195,61 @@ onBeforeUnmount(() => {
 </template>
 ```
 
-## Configuration Options
+---
 
-Pass these options as the second argument to `new IIIFViewer(target, options)`:
+## Configuration Options
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `manifestUrl` | `string` | `''` | IIIF Presentation 2.0 or 3.0 manifest URL to fetch on mount (also accepts `url`). |
-| `manifest` | `object \| string \| null` | `null` | Pre-loaded manifest JSON object or string (also accepts `data`). Takes precedence over `manifestUrl`. |
-| `proxyUrl` | `string` | `''` | Optional CORS proxy prefix prepended to `encodeURIComponent(url)` when fetching manifests. |
-| `theme` | `'light' \| 'dark'` | `'dark'` | Initial color theme of the viewer UI. Users can switch themes via the header toggle button. |
-| `showUrlInput` | `boolean` | `true` | Displays an interactive manifest URL input bar and **Load** button in the header. |
-| `showSidebar` | `boolean` | `true` | Sets whether the right-hand Metadata / Index / Notes sidebar is open on initial render. |
-| `height` | `string` | `'680px'` | CSS height of the viewer container (minimum height is `540px`). |
-| `initialCanvas` | `number` | `0` | Zero-based index of the canvas to display when a manifest first loads. |
-| `fetchOptions` | `RequestInit` | `{}` | Additional options passed to `fetch()` when requesting `manifestUrl`. |
+| `manifestUrl` (or `url`) | `string` | `''` | URL of a IIIF Presentation 2.0, 3.0, or 4.0 manifest to fetch on mount. |
+| `manifest` (or `data`) | `object \| string` | `null` | Pre-loaded IIIF manifest JSON object or JSON string. |
+| `proxyRoutes` | `object \| array \| function` | `null` | Rewrites manifest and asset URLs (`'manifest'`, `'image'`, `'model'`, `'thumbnail'`). Accepts `{ prefix: replacement }`, `[{ match, replace, types }]`, or `(url, resourceType) => string`. |
+| `proxyUrl` | `string` | `''` | Prefix URL prepended to `encodeURIComponent(url)` when fetching manifests. |
+| `assetProxyUrl` | `string` | `''` | Prefix URL prepended to `encodeURIComponent(url)` when fetching downstream images, `.glb` models, and thumbnails. |
+| `dracoDecoderPath` | `string` | Google CDN 1.5.7 | Path/URL to Draco WASM/JS decoders for Draco-compressed `.glb` models. |
+| `theme` | `'dark' \| 'light'` | `'dark'` | Initial scoped theme for the viewer container. |
+| `height` | `string` | `'680px'` | CSS height of the viewer container when not in fullscreen. |
+| `showUrlInput` | `boolean` | `true` | Shows or hides the manifest URL input bar in the top toolbar. |
+| `showSidebar` | `boolean` | `true` | Initial visibility of the Metadata / Index / Notes sidebar. |
+| `initialCanvas` | `number` | `0` | Zero-based index of the initial canvas or 3D scene to display. |
+| `fetchOptions` | `RequestInit` | `{}` | Optional `fetch` options (such as `credentials` or custom `headers`). |
+| `modelViewer` | `class` | `null` | Optional custom 3D viewer class (e.g., `GlbModelViewer` from `@micropasts/glb-model-viewer`) to override the built-in Three.js scene viewer. |
+| `onSelectScene` | `function` | `null` | Optional callback `(container, sceneData, meta) => instance` for custom 3D scene rendering. |
+
+---
 
 ## Instance Methods
 
-Once instantiated (`const viewer = new IIIFViewer(...)`), the following methods are available:
-
 | Method | Signature | Description |
 | :--- | :--- | :--- |
-| `loadManifest(url)` | `(url: string) => Promise<void>` | Fetches a IIIF manifest from `url` and renders the viewer. |
-| `setManifest(json)` | `(json: object \| string) => void` | Parses and renders a manifest JSON object or string immediately. |
-| `goToCanvas(index)` | `(index: number) => void` | Navigates OpenSeadragon, the filmstrip, and the sidebar to the canvas at `index`. |
-| `toggleSidebar()` | `() => void` | Shows or hides the right-hand Metadata / Index / Notes panel. |
-| `setTheme(theme)` | `(theme: 'light' \| 'dark') => void` | Sets the viewer theme (`'light'` or `'dark'`). |
-| `toggleTheme()` | `() => void` | Toggles between `'light'` and `'dark'` themes. |
-| `destroy()` | `() => void` | Destroys the OpenSeadragon instance and cleans up the DOM container. |
+| `loadManifest` | `async loadManifest(url)` | Fetches and renders a IIIF manifest from the given URL (applying `proxyRoutes` / `proxyUrl`). |
+| `setManifest` | `setManifest(jsonOrString)` | Parses and renders a manifest JSON object or string directly. |
+| `goToCanvas` | `goToCanvas(index)` | Navigates to the specified zero-based canvas or 3D scene index. |
+| `setProxyRoutes` | `setProxyRoutes(routes)` | Updates `proxyRoutes` at runtime and reloads the active canvas/scene. |
+| `resolveUrl` | `resolveUrl(url, resourceType)` | Resolves a URL through configured `proxyRoutes`, `assetProxyUrl`, or `proxyUrl`. |
+| `setTheme` | `setTheme('dark' \| 'light')` | Switches the viewer theme between dark and light mode. |
+| `toggleTheme` | `toggleTheme()` | Toggles between dark and light mode. |
+| `toggleSidebar` | `toggleSidebar()` | Shows or hides the right-hand Metadata / Index / Notes sidebar. |
+| `enterFullscreen` | `async enterFullscreen()` | Expands the viewer to fullscreen (with fixed-viewport fallback). |
+| `exitFullscreen` | `async exitFullscreen()` | Exits fullscreen mode. |
+| `toggleFullscreen` | `toggleFullscreen()` | Toggles fullscreen mode. |
+| `destroy` | `destroy()` | Cleans up OpenSeadragon, Three.js WebGL contexts, event listeners, and DOM nodes. |
 
-## Development & Building
+---
+
+## Local Development & GitHub Pages Build
 
 ```bash
 # Install dependencies
 npm install
 
-# Start local dev sandbox (serves index.html)
+# Start local dev server (includes /images and /finds proxy to http://localhost:8000)
 npm run dev
 
-# Build npm library bundle (outputs to dist/)
+# Build npm library bundle into dist/
 npm run build
 
-# Build static GitHub Pages demo site (outputs to docs/)
+# Build static demo site into docs/ for GitHub Pages
 npm run build:docs
 ```
 

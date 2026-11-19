@@ -1,6 +1,7 @@
 import OpenSeadragon from 'openseadragon';
 import './style.css';
 import { parseIIIFManifest } from './parser.js';
+import { BuiltInSceneViewer } from './scene-viewer.js';
 import {
   renderShell,
   renderMetadataTab,
@@ -20,12 +21,17 @@ export class IIIFViewer {
       manifestUrl: options.manifestUrl || options.url || '',
       manifest: options.manifest || options.data || null,
       proxyUrl: options.proxyUrl || '',
+      assetProxyUrl: options.assetProxyUrl || '',
+      proxyRoutes: options.proxyRoutes || null,
+      dracoDecoderPath: options.dracoDecoderPath || undefined,
       theme: options.theme || 'dark',
       showUrlInput: options.showUrlInput ?? true,
       showSidebar: options.showSidebar ?? true,
       height: options.height || '680px',
       initialCanvas: options.initialCanvas || 0,
       fetchOptions: options.fetchOptions || {},
+      modelViewer: options.modelViewer || null,
+      onSelectScene: options.onSelectScene || null,
     };
 
     this.state = {
@@ -39,6 +45,7 @@ export class IIIFViewer {
     };
 
     this.osd = null;
+    this.activeModelViewer = null;
     this._onFullscreenChange = this.handleFullscreenChange.bind(this);
     this._onKeyDown = this.handleKeyDown.bind(this);
 
@@ -48,6 +55,58 @@ export class IIIFViewer {
       this.setManifest(this.options.manifest);
     } else if (this.options.manifestUrl) {
       this.loadManifest(this.options.manifestUrl);
+    }
+  }
+
+  /**
+   * Resolves a manifest or asset URL through proxyRoutes, assetProxyUrl, or proxyUrl.
+   * @param {string} url
+   * @param {'manifest'|'image'|'model'|'thumbnail'} resourceType
+   */
+  resolveUrl(url, resourceType = 'asset') {
+    if (!url || url.startsWith('blob:') || url.startsWith('data:')) {
+      return url;
+    }
+
+    const routes = this.options.proxyRoutes;
+    if (typeof routes === 'function') {
+      const rewritten = routes(url, resourceType);
+      if (rewritten) return rewritten;
+    } else if (Array.isArray(routes)) {
+      for (const rule of routes) {
+        if (!rule) continue;
+        if (rule.types && !rule.types.includes(resourceType)) continue;
+        if (typeof rule.match === 'string' && url.startsWith(rule.match)) {
+          return `${rule.replace}${url.slice(rule.match.length)}`;
+        }
+        if (rule.match instanceof RegExp && rule.match.test(url)) {
+          return url.replace(rule.match, rule.replace);
+        }
+      }
+    } else if (routes && typeof routes === 'object') {
+      for (const [prefix, replacement] of Object.entries(routes)) {
+        if (url.startsWith(prefix)) {
+          return `${replacement}${url.slice(prefix.length)}`;
+        }
+      }
+    }
+
+    if (resourceType === 'manifest' && this.options.proxyUrl) {
+      return `${this.options.proxyUrl}${encodeURIComponent(url)}`;
+    }
+
+    if (resourceType !== 'manifest' && this.options.assetProxyUrl) {
+      return `${this.options.assetProxyUrl}${encodeURIComponent(url)}`;
+    }
+
+    return url;
+  }
+
+  setProxyRoutes(proxyRoutes) {
+    this.options.proxyRoutes = proxyRoutes;
+    if (this.state.manifest) {
+      this.renderFilmstrip();
+      this.goToCanvas(this.state.canvasIndex);
     }
   }
 
@@ -145,7 +204,7 @@ export class IIIFViewer {
         await this.wrapper.requestFullscreen();
         return;
       } catch {
-        // Fall through to CSS fixed-viewport fallback if blocked (e.g., sandboxed iframe)
+        // Fallback for sandboxed iframes
       }
     }
 
@@ -160,7 +219,7 @@ export class IIIFViewer {
         await document.exitFullscreen();
         return;
       } catch {
-        // Fall through to manual style reset
+        // Fallback
       }
     }
 
@@ -207,10 +266,10 @@ export class IIIFViewer {
     enterIcon?.classList.toggle('hidden', active);
     exitIcon?.classList.toggle('hidden', !active);
 
-    // Recalculate OpenSeadragon viewport bounds after container resize
     requestAnimationFrame(() => {
       this.osd?.viewport?.resize();
       this.osd?.viewport?.applyConstraints();
+      this.activeModelViewer?.handleResize?.();
     });
   }
 
@@ -219,6 +278,7 @@ export class IIIFViewer {
   setTheme(theme) {
     this.state.theme = theme === 'light' ? 'light' : 'dark';
     this.wrapper.classList.toggle('dark', this.state.theme === 'dark');
+    this.activeModelViewer?.setTheme?.(this.state.theme);
   }
 
   toggleTheme() {
@@ -244,10 +304,7 @@ export class IIIFViewer {
         fetchOpts.headers = this.options.fetchOptions.headers;
       }
 
-      const targetUrl = this.options.proxyUrl
-        ? `${this.options.proxyUrl}${encodeURIComponent(url)}`
-        : url;
-
+      const targetUrl = this.resolveUrl(url, 'manifest');
       const res = await fetch(targetUrl, fetchOpts);
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const json = await res.json();
@@ -257,7 +314,7 @@ export class IIIFViewer {
         err instanceof TypeError && /fetch|network/i.test(err.message);
       this.setError(
         isCorsOrNetwork
-          ? `Network or CORS error fetching manifest from ${url}. Ensure the server allows cross-origin requests or configure proxyUrl.`
+          ? `Network or CORS error fetching manifest from ${url}. Ensure the server allows cross-origin requests or configure proxyUrl / proxyRoutes.`
           : err.message || 'Failed to load IIIF Manifest.'
       );
     } finally {
@@ -270,7 +327,7 @@ export class IIIFViewer {
       const raw = typeof jsonOrString === 'string' ? JSON.parse(jsonOrString) : jsonOrString;
       const parsed = parseIIIFManifest(raw);
       if (!parsed.canvases.length) {
-        throw new Error('Manifest contains no displayable canvases.');
+        throw new Error('Manifest contains no displayable canvases or 3D scenes.');
       }
 
       this.state.manifest = parsed;
@@ -300,12 +357,28 @@ export class IIIFViewer {
     if (!manifest || index < 0 || index >= manifest.canvases.length) return;
 
     this.state.canvasIndex = index;
-    const canvas = manifest.canvases[index];
+    const item = manifest.canvases[index];
 
-    if (canvas.image.infoJsonUrl) {
-      this.osd.open(canvas.image.infoJsonUrl);
-    } else if (canvas.image.staticUrl) {
-      this.osd.open({ type: 'image', url: canvas.image.staticUrl });
+    const osdEl = this.wrapper.querySelector('[data-el="osd-container"]');
+    const sceneEl = this.wrapper.querySelector('[data-el="scene-container"]');
+    const zoomControls = this.wrapper.querySelector('[data-el="zoom-controls"]');
+
+    if (item.kind === 'scene' && item.scene?.modelUrl) {
+      osdEl?.classList.add('hidden');
+      zoomControls?.classList.add('hidden');
+      sceneEl?.classList.remove('hidden');
+      this.mountSceneViewer(sceneEl, item);
+    } else {
+      this.destroySceneViewer();
+      sceneEl?.classList.add('hidden');
+      osdEl?.classList.remove('hidden');
+      zoomControls?.classList.remove('hidden');
+
+      if (item.image.infoJsonUrl) {
+        this.osd.open(this.resolveUrl(item.image.infoJsonUrl, 'image'));
+      } else if (item.image.staticUrl) {
+        this.osd.open({ type: 'image', url: this.resolveUrl(item.image.staticUrl, 'image') });
+      }
     }
 
     const pager = this.wrapper.querySelector('[data-el="pager-controls"]');
@@ -319,12 +392,56 @@ export class IIIFViewer {
     this.renderSidebarContent();
   }
 
+  mountSceneViewer(container, item) {
+    this.destroySceneViewer();
+    if (!container) return;
+
+    const resolvedModelUrl = this.resolveUrl(item.scene.modelUrl, 'model');
+
+    if (typeof this.options.onSelectScene === 'function') {
+      this.activeModelViewer = this.options.onSelectScene(
+        container,
+        { ...item.scene, modelUrl: resolvedModelUrl },
+        {
+          theme: this.state.theme,
+          title: item.label,
+        }
+      );
+      return;
+    }
+
+    if (this.options.modelViewer) {
+      this.activeModelViewer = new this.options.modelViewer(container, {
+        url: resolvedModelUrl,
+        theme: this.state.theme,
+        title: item.label,
+        showHeader: false,
+      });
+      return;
+    }
+
+    this.activeModelViewer = new BuiltInSceneViewer(container, item.scene, {
+      theme: this.state.theme,
+      title: item.label,
+      resolvedModelUrl,
+      dracoDecoderPath: this.options.dracoDecoderPath,
+    });
+  }
+
+  destroySceneViewer() {
+    this.activeModelViewer?.destroy?.();
+    this.activeModelViewer = null;
+    const sceneEl = this.wrapper.querySelector('[data-el="scene-container"]');
+    if (sceneEl) sceneEl.innerHTML = '';
+  }
+
   destroy() {
     document.removeEventListener('fullscreenchange', this._onFullscreenChange);
     document.removeEventListener('keydown', this._onKeyDown);
     if (this.state.isFullscreen) {
       this.exitFullscreen();
     }
+    this.destroySceneViewer();
     this.osd?.destroy();
     this.container.innerHTML = '';
   }
@@ -368,8 +485,9 @@ export class IIIFViewer {
 
     strip.classList.remove('hidden');
     strip.innerHTML = canvases
-      .map(
-        (c) => `
+      .map((c) => {
+        const thumbUrl = c.image.thumbnail ? this.resolveUrl(c.image.thumbnail, 'thumbnail') : null;
+        return `
         <button
           type="button"
           data-canvas-index="${c.index}"
@@ -377,15 +495,20 @@ export class IIIFViewer {
           class="group relative h-18 w-16 shrink-0 rounded-md overflow-hidden border-2 border-transparent bg-slate-200 dark:bg-slate-800 transition focus:outline-hidden"
         >
           ${
-            c.image.thumbnail
-              ? `<img src="${escapeHtml(c.image.thumbnail)}" alt="${escapeHtml(c.label)}" class="w-full h-full object-cover" loading="lazy" />`
+            thumbUrl
+              ? `<img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(c.label)}" class="w-full h-full object-cover" loading="lazy" />`
               : `<span class="text-[10px] text-slate-500 p-1 block truncate">${escapeHtml(c.label)}</span>`
+          }
+          ${
+            c.kind === 'scene'
+              ? `<span class="absolute top-1 right-1 px-1 rounded bg-amber-500 text-slate-950 text-[8px] font-bold">3D</span>`
+              : ''
           }
           <span class="absolute bottom-0 inset-x-0 bg-slate-950/75 text-white text-[9px] font-mono px-1 truncate">
             ${c.index + 1}
           </span>
-        </button>`
-      )
+        </button>`;
+      })
       .join('');
   }
 
@@ -410,5 +533,3 @@ export class IIIFViewer {
     box.classList.toggle('hidden', !message);
   }
 }
-
-export default IIIFViewer;

@@ -16,6 +16,18 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [tailwindcss()],
+    server: {
+      proxy: {
+        '/images': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/finds': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+      },
+    },
     build: {
       copyPublicDir: false,
       lib: {
