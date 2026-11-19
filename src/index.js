@@ -17,6 +17,9 @@ export class IIIFViewer {
       throw new Error('IIIFViewer: Target container element not found.');
     }
 
+    const defaultSidebarOpen =
+      typeof window !== 'undefined' ? window.innerWidth >= 768 : true;
+
     this.options = {
       manifestUrl: options.manifestUrl || options.url || '',
       manifest: options.manifest || options.data || null,
@@ -26,11 +29,10 @@ export class IIIFViewer {
       dracoDecoderPath: options.dracoDecoderPath || undefined,
       theme: options.theme || 'dark',
       showUrlInput: options.showUrlInput ?? true,
-      showSidebar: options.showSidebar ?? true,
+      showSidebar: options.showSidebar ?? defaultSidebarOpen,
       height: options.height || '680px',
       initialCanvas: options.initialCanvas || 0,
       fetchOptions: options.fetchOptions || {},
-      modelViewer: options.modelViewer || null,
       onSelectScene: options.onSelectScene || null,
     };
 
@@ -40,7 +42,7 @@ export class IIIFViewer {
       manifest: null,
       canvasIndex: this.options.initialCanvas,
       activeTab: 'metadata',
-      sidebarOpen: this.options.showSidebar,
+      sidebarOpen: Boolean(this.options.showSidebar),
       isFullscreen: false,
     };
 
@@ -122,13 +124,24 @@ export class IIIFViewer {
     this.container.innerHTML = '';
     this.container.appendChild(this.wrapper);
 
-    if (!this.state.sidebarOpen) {
-      this.wrapper.querySelector('[data-el="sidebar"]')?.classList.add('hidden');
-    }
-
+    this.syncSidebarUI();
     this.initOpenSeadragon();
     this.bindEvents();
     this.updateTabStyles();
+  }
+
+  syncSidebarUI() {
+    const sidebar = this.wrapper.querySelector('[data-el="sidebar"]');
+    sidebar?.classList.toggle('hidden', !this.state.sidebarOpen);
+
+    const toggleBtn = this.wrapper.querySelector('button[data-action="toggle-sidebar"]');
+    if (toggleBtn) {
+      toggleBtn.setAttribute('aria-expanded', String(this.state.sidebarOpen));
+      toggleBtn.classList.toggle('bg-purple-600', this.state.sidebarOpen);
+      toggleBtn.classList.toggle('dark:bg-purple-600', this.state.sidebarOpen);
+      toggleBtn.classList.toggle('text-white', this.state.sidebarOpen);
+      toggleBtn.classList.toggle('border-purple-600', this.state.sidebarOpen);
+    }
   }
 
   initOpenSeadragon() {
@@ -287,7 +300,13 @@ export class IIIFViewer {
 
   toggleSidebar() {
     this.state.sidebarOpen = !this.state.sidebarOpen;
-    this.wrapper.querySelector('[data-el="sidebar"]')?.classList.toggle('hidden', !this.state.sidebarOpen);
+    this.syncSidebarUI();
+
+    requestAnimationFrame(() => {
+      this.osd?.viewport?.resize();
+      this.osd?.viewport?.applyConstraints();
+      this.activeModelViewer?.handleResize?.();
+    });
   }
 
   async loadManifest(url) {
@@ -392,7 +411,7 @@ export class IIIFViewer {
     this.renderSidebarContent();
   }
 
-  mountSceneViewer(container, item) {
+  async mountSceneViewer(container, item) {
     this.destroySceneViewer();
     if (!container) return;
 
@@ -410,15 +429,8 @@ export class IIIFViewer {
       return;
     }
 
-    if (this.options.modelViewer) {
-      this.activeModelViewer = new this.options.modelViewer(container, {
-        url: resolvedModelUrl,
-        theme: this.state.theme,
-        title: item.label,
-        showHeader: false,
-      });
-      return;
-    }
+    const { BuiltInSceneViewer } = await import('./scene-viewer.js');
+    if (this.state.canvasIndex !== item.index) return; // Guard if user switched canvases while loading
 
     this.activeModelViewer = new BuiltInSceneViewer(container, item.scene, {
       theme: this.state.theme,

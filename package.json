@@ -43,14 +43,6 @@
     "openseadragon": "^5.0.1",
     "three": "^0.175.0"
   },
-  "peerDependencies": {
-    "@micropasts/glb-model-viewer": "^1.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@micropasts/glb-model-viewer": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",
     "tailwindcss": "^4.1.0",

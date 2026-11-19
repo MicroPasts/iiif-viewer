@@ -10,6 +10,15 @@ export default defineConfig(({ mode }) => {
       build: {
         outDir: 'docs',
         emptyOutDir: true,
+        chunkSizeWarningLimit: 800,
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              three: ['three'],
+              openseadragon: ['openseadragon'],
+            },
+          },
+        },
       },
     };
   }
@@ -30,6 +39,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       copyPublicDir: false,
+      chunkSizeWarningLimit: 1000,
       lib: {
         entry: resolve(__dirname, 'src/index.js'),
         name: 'IIIFViewer',

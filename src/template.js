@@ -92,7 +92,7 @@ export function renderShell({ showUrlInput, currentUrl, height }) {
             <button type="button" data-action="rotate" title="Rotate 90°" class="px-2 py-1 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition">&#8635;</button>
           </div>
 
-          <button type="button" data-action="toggle-sidebar" title="Toggle Info Panel" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition">
+          <button type="button" data-action="toggle-sidebar" title="Toggle Info Panel" aria-expanded="false" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition">
             Info
           </button>
 
@@ -145,12 +145,13 @@ export function renderShell({ showUrlInput, currentUrl, height }) {
           </div>
         </div>
 
-        <!-- Right Metadata / Index / Annotations Sidebar -->
-        <aside data-el="sidebar" class="w-80 shrink-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/95 flex flex-col overflow-hidden">
-          <div class="shrink-0 flex border-b border-slate-200 dark:border-slate-800 text-xs font-medium">
+        <!-- Right Metadata / Index / Annotations Sidebar (Overlay drawer on < md, docked on md+) -->
+        <aside data-el="sidebar" class="absolute inset-y-0 right-0 z-30 w-80 max-w-[85vw] md:static md:z-auto md:max-w-none shrink-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/95 shadow-2xl md:shadow-none flex flex-col overflow-hidden">
+          <div class="shrink-0 flex items-center border-b border-slate-200 dark:border-slate-800 text-xs font-medium">
             <button type="button" data-tab="metadata" class="flex-1 py-2.5 text-center border-b-2 transition">Metadata</button>
             <button type="button" data-tab="structures" class="flex-1 py-2.5 text-center border-b-2 transition">Index</button>
             <button type="button" data-tab="annotations" class="flex-1 py-2.5 text-center border-b-2 transition">Notes</button>
+            <button type="button" data-action="toggle-sidebar" title="Close Info Panel" aria-label="Close Info Panel" class="md:hidden px-3 py-2.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition">&times;</button>
           </div>
           <div data-el="sidebar-content" class="iiif-scroll flex-1 overflow-y-auto p-4 text-xs space-y-4"></div>
         </aside>
