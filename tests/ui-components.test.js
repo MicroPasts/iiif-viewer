@@ -63,13 +63,34 @@ describe('sidebar', () => {
   it('toggles visibility and expands a long summary', () => {
     const sidebar = new SidebarPanel(wrapper, { isOpen: true, summaryCollapseLength: 5 });
     sidebar.render(manifest, manifest.canvases[0]);
+    const summaryBody = wrapper.querySelector('[data-el="summary-body"]');
     const summaryButton = wrapper.querySelector('[data-action="toggle-summary"]');
+    expect(summaryBody.classList.contains('line-clamp-4')).toBe(true);
     expect(summaryButton.getAttribute('aria-expanded')).toBe('false');
+    expect(summaryButton.textContent).toBe('Show more');
     summaryButton.click();
+    expect(summaryBody.classList.contains('line-clamp-4')).toBe(false);
     expect(summaryButton.getAttribute('aria-expanded')).toBe('true');
+    expect(summaryButton.textContent).toBe('Show less');
+    summaryButton.click();
+    expect(summaryBody.classList.contains('line-clamp-4')).toBe(true);
+    expect(summaryButton.getAttribute('aria-expanded')).toBe('false');
     sidebar.toggle();
     expect(wrapper.querySelector('[data-el="sidebar"]').classList.contains('hidden')).toBe(true);
     expect(wrapper.querySelector('[data-action="toggle-sidebar"]').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('uses the plain-text summary length and disables collapsing at or below the threshold', () => {
+    const summary = '<p>A <strong>long</strong> description</p>';
+    const atThreshold = new SidebarPanel(wrapper, { summaryCollapseLength: 18 });
+    const aboveThreshold = new SidebarPanel(wrapper, { summaryCollapseLength: 17 });
+    const disabledAtZero = new SidebarPanel(wrapper, { summaryCollapseLength: 0 });
+    const disabledBelowZero = new SidebarPanel(wrapper, { summaryCollapseLength: -1 });
+
+    expect(atThreshold.renderSummaryBlock(summary)).not.toContain('data-action="toggle-summary"');
+    expect(aboveThreshold.renderSummaryBlock(summary)).toContain('data-action="toggle-summary"');
+    expect(disabledAtZero.renderSummaryBlock(summary)).not.toContain('data-action="toggle-summary"');
+    expect(disabledBelowZero.renderSummaryBlock(summary)).not.toContain('data-action="toggle-summary"');
   });
 
   it('opens notes and dispatches annotation overlay actions', () => {
