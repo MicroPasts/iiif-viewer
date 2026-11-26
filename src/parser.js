@@ -153,7 +153,8 @@ function normalizeImageSource(canvas, isV3) {
           (Array.isArray(a.motivation) && a.motivation.includes('painting'))
       );
       if (painting && painting.body) {
-        const rawBody = Array.isArray(painting.body) ? painting.body[0] : painting.body;
+        let rawBody = Array.isArray(painting.body) ? painting.body[0] : painting.body;
+        if (rawBody?.type === 'Choice') rawBody = rawBody.items?.[0];
         ({ serviceUrl, serviceProfile, staticUrl, width, height } =
           extractImageFromPaintingBody(rawBody, width, height));
         break;
@@ -163,7 +164,9 @@ function normalizeImageSource(canvas, isV3) {
     const images = canvas.images || [];
     const painting = images[0];
     if (painting && painting.resource) {
-      const res = painting.resource;
+      let res = painting.resource;
+      if (res['@type'] === 'oa:Choice') res = res.default || (Array.isArray(res.item) ? res.item[0] : res.item);
+      if (!res) return { serviceUrl, serviceProfile, infoJsonUrl: null, staticUrl, thumbnail: null, width, height };
       staticUrl = res['@id'] || res.id || null;
       width = width || res.width || null;
       height = height || res.height || null;
@@ -194,6 +197,66 @@ function normalizeImageSource(canvas, isV3) {
     width,
     height,
   };
+}
+
+function paintingCoversCanvas(annotation, canvas) {
+  const target = annotation?.target || annotation?.on;
+  const targetId = typeof target === 'string' ? target : target?.id || target?.['@id'];
+  const canvasId = canvas.id || canvas['@id'];
+  let body = annotation?.body || annotation?.resource;
+  if (Array.isArray(body)) body = body[0];
+  if (body?.type === 'Choice') body = body.items?.[0];
+  if (body?.['@type'] === 'oa:Choice') body = body.default || (Array.isArray(body.item) ? body.item[0] : body.item);
+  return !target?.selector && !targetId?.includes('#') && !body?.selector && !body?.transform &&
+    (!targetId || !canvasId || targetId === canvasId);
+}
+
+function canvasPaintingAnnotations(canvas, isV3) {
+  return isV3
+    ? (canvas.items || []).flatMap((page) => page.items || [])
+      .filter((a) => a.motivation === 'painting' || a.motivation?.includes?.('painting'))
+    : canvas.images || [];
+}
+
+function normalizeCanvasLayers(canvas, isV3, preferredLang) {
+  const annotations = canvasPaintingAnnotations(canvas, isV3);
+  const layers = [];
+  for (const annotation of annotations) {
+    if (!paintingCoversCanvas(annotation, canvas)) continue;
+    const raw = isV3 ? annotation.body : annotation.resource;
+    const bodies = Array.isArray(raw) ? raw : [raw];
+    for (const body of bodies) {
+      const choices = body?.type === 'Choice' ? body.items || [] :
+        body?.['@type'] === 'oa:Choice' ? [body.default, ...(body.item ? (Array.isArray(body.item) ? body.item : [body.item]) : [])] : [body];
+      for (const choice of choices) {
+        if (!choice || choice.selector || choice.transform) continue;
+        const source = extractImageFromPaintingBody(choice);
+        if (!isV3 && !source.serviceUrl && choice.service) {
+          const service = Array.isArray(choice.service) ? choice.service[0] : choice.service;
+          source.serviceUrl = (service?.id || service?.['@id'] || '').replace(/\/$/, '') || null;
+          source.serviceProfile = service?.profile || service?.['@type'] || null;
+        }
+        if (!source.staticUrl && !source.serviceUrl) continue;
+        layers.push({
+          ...source,
+          infoJsonUrl: source.serviceUrl ? `${source.serviceUrl}/info.json` : null,
+          rawLabel: choice.label,
+          label: extractLangValue(choice.label, preferredLang) || `Image ${layers.length + 1}`,
+        });
+      }
+    }
+  }
+  return layers;
+}
+
+function normalizePhysicalScale(canvas) {
+  const dimension = canvas.physicalDimensions;
+  const factor = { mm: 1, cm: 10, in: 25.4 }[dimension?.physicalUnits];
+  const scale = Number(dimension?.physicalScale);
+  if (!factor || !Number.isFinite(scale) || scale <= 0 ||
+      !/^https?:\/\/iiif\.io\/api\/annex\/extensions\/physdim\/?$/.test(dimension?.profile || '')) return null;
+  const millimeters = scale * factor;
+  return Number.isFinite(millimeters) && millimeters > 0 ? millimeters : null;
 }
 
 function canvasesFromAnnotationPage(annoPage, preferredLang) {
@@ -617,6 +680,11 @@ export function parseIIIFManifest(manifest, preferredLang = 'en') {
               rawLabel: c.label,
               label: canvasLabel,
               image,
+              layers: normalizeCanvasLayers(c, isV3, preferredLang),
+              imageCoversCanvas: paintingCoversCanvas(canvasPaintingAnnotations(c, isV3)[0], c),
+              canvasWidth: c.width || null,
+              canvasHeight: c.height || null,
+              millimetersPerPixel: normalizePhysicalScale(c),
               scene: null,
               annotations,
               externalAnnotationUrls,
