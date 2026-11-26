@@ -92,7 +92,7 @@ export function renderShell({ showUrlInput, currentUrl, height }) {
             <button type="button" data-action="rotate" title="Rotate 90°" class="px-2 py-1 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition">&#8635;</button>
           </div>
 
-          <button type="button" data-action="toggle-sidebar" title="Toggle Info Panel" aria-expanded="false" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition">
+          <button type="button" data-action="toggle-sidebar" title="Toggle Info Panel" aria-expanded="false" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 aria-expanded:bg-purple-600 aria-expanded:hover:bg-purple-500 aria-expanded:border-purple-600 aria-expanded:text-white transition">
             Info
           </button>
 

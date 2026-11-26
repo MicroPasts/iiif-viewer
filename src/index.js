@@ -137,10 +137,6 @@ export class IIIFViewer {
     const toggleBtn = this.wrapper.querySelector('button[data-action="toggle-sidebar"]');
     if (toggleBtn) {
       toggleBtn.setAttribute('aria-expanded', String(this.state.sidebarOpen));
-      toggleBtn.classList.toggle('bg-purple-600', this.state.sidebarOpen);
-      toggleBtn.classList.toggle('dark:bg-purple-600', this.state.sidebarOpen);
-      toggleBtn.classList.toggle('text-white', this.state.sidebarOpen);
-      toggleBtn.classList.toggle('border-purple-600', this.state.sidebarOpen);
     }
   }
 

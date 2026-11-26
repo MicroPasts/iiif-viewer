@@ -24,6 +24,8 @@ export class BuiltInSceneViewer {
     this.wrapperGroup = null;
     this.dracoLoader = null;
     this.objectUrls = [];
+    this.loadGeneration = 0;
+    this.destroyed = false;
     this.defaultCameraPos = new THREE.Vector3(0, 0.25, 2.35);
 
     this.mount();
@@ -56,13 +58,13 @@ export class BuiltInSceneViewer {
           <button type="button" data-three-action="reset" title="Reset Camera" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
             Reset View
           </button>
-          <button type="button" data-three-action="autorotate" title="Toggle Auto-Rotate" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <button type="button" data-three-action="autorotate" title="Toggle Auto-Rotate" aria-pressed="false" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
             Auto-Rotate
           </button>
-          <button type="button" data-three-action="wireframe" title="Toggle Wireframe" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <button type="button" data-three-action="wireframe" title="Toggle Wireframe" aria-pressed="false" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
             Wireframe
           </button>
-          <button type="button" data-three-action="lighting" title="Toggle Raking / Warm Light" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <button type="button" data-three-action="lighting" title="Toggle Raking / Warm Light" aria-pressed="false" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
             Raking Light
           </button>
           <label title="Open Local .GLB File" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition">
@@ -140,23 +142,44 @@ export class BuiltInSceneViewer {
   clearCurrentModel() {
     if (!this.wrapperGroup) return;
     this.scene.remove(this.wrapperGroup);
-    this.wrapperGroup.traverse((obj) => {
-      if (obj.isMesh) {
-        obj.geometry?.dispose();
-        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-        mats.forEach((m) => m?.dispose());
-      }
-    });
+    this.disposeObject(this.wrapperGroup);
     this.wrapperGroup = null;
   }
 
+  disposeObject(object) {
+    const disposedTextures = new Set();
+    object.traverse((obj) => {
+      if (!obj.isMesh) return;
+      obj.geometry?.dispose();
+      const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+      materials.forEach((material) => {
+        if (!material) return;
+        Object.values(material).forEach((value) => {
+          if (value?.isTexture && !disposedTextures.has(value)) {
+            disposedTextures.add(value);
+            value.dispose();
+          }
+        });
+        material.dispose();
+      });
+    });
+  }
+
   loadModel(url) {
+    if (!url) {
+      this.showLoadError('No 3D model URL was provided.');
+      return;
+    }
+
+    const generation = ++this.loadGeneration;
     const loader = new GLTFLoader();
     loader.setCrossOrigin('anonymous');
 
     if (this.dracoDecoderPath) {
-      this.dracoLoader = new DRACOLoader();
-      this.dracoLoader.setDecoderPath(this.dracoDecoderPath);
+      if (!this.dracoLoader) {
+        this.dracoLoader = new DRACOLoader();
+        this.dracoLoader.setDecoderPath(this.dracoDecoderPath);
+      }
       loader.setDRACOLoader(this.dracoLoader);
     }
 
@@ -172,6 +195,10 @@ export class BuiltInSceneViewer {
     loader.load(
       url,
       (gltf) => {
+        if (this.destroyed || generation !== this.loadGeneration) {
+          this.disposeObject(gltf.scene);
+          return;
+        }
         loadingEl?.classList.add('hidden');
         this.clearCurrentModel();
 
@@ -204,27 +231,51 @@ export class BuiltInSceneViewer {
         this.wrapperGroup.add(root);
         this.wrapperGroup.scale.setScalar(scale);
 
+        if (this.state.wireframe) {
+          this.wrapperGroup.traverse((obj) => {
+            if (obj.isMesh && obj.material) {
+              const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+              materials.forEach((material) => {
+                material.wireframe = true;
+              });
+            }
+          });
+        }
+
         this.scene.add(this.wrapperGroup);
         this.fitCameraToObject();
       },
       (xhr) => {
+        if (generation !== this.loadGeneration) return;
         if (xhr.lengthComputable && progressEl) {
           const pct = Math.min(100, Math.round((xhr.loaded / xhr.total) * 100));
           progressEl.textContent = `${pct}%`;
         }
       },
       () => {
+        if (this.destroyed || generation !== this.loadGeneration) return;
         loadingEl?.classList.add('hidden');
-        if (errorEl && errorMsgEl) {
-          const protocolHint =
-            window.location.protocol === 'file:'
-              ? ' You are viewing over file:// — run "npm run dev" or select the local .glb file below.'
-              : ' Ensure the server sends Access-Control-Allow-Origin headers or configure proxyRoutes / assetProxyUrl, or select the .glb file directly:';
-          errorMsgEl.textContent = `Could not fetch 3D model from ${url}.${protocolHint}`;
-          errorEl.classList.remove('hidden');
-        }
+        this.showLoadError(url);
       }
     );
+  }
+
+  showLoadError(url) {
+    const loadingEl = this.container.querySelector('[data-el="three-loading"]');
+    const errorEl = this.container.querySelector('[data-el="three-error"]');
+    const errorMsgEl = this.container.querySelector('[data-el="three-error-msg"]');
+    loadingEl?.classList.add('hidden');
+    if (!errorEl || !errorMsgEl) return;
+
+    const protocolHint =
+      window.location.protocol === 'file:'
+        ? ' You are viewing over file:// — run "npm run dev" or select the local .glb file below.'
+        : ' Ensure the server sends Access-Control-Allow-Origin headers or configure proxyRoutes / assetProxyUrl, or select the .glb file directly:';
+    errorMsgEl.textContent =
+      url === 'No 3D model URL was provided.'
+        ? url
+        : `Could not fetch 3D model from ${url}.${protocolHint}`;
+    errorEl.classList.remove('hidden');
   }
 
   fitCameraToObject() {
@@ -245,6 +296,7 @@ export class BuiltInSceneViewer {
         const blobUrl = URL.createObjectURL(file);
         this.objectUrls.push(blobUrl);
         this.loadModel(blobUrl);
+        e.target.value = '';
       }
     });
 
@@ -261,6 +313,7 @@ export class BuiltInSceneViewer {
         this.controls.autoRotateSpeed = 2.0;
         btn.classList.toggle('bg-purple-600', this.state.autoRotate);
         btn.classList.toggle('text-white', this.state.autoRotate);
+        btn.setAttribute('aria-pressed', String(this.state.autoRotate));
       } else if (action === 'wireframe') {
         this.state.wireframe = !this.state.wireframe;
         this.scene.traverse((obj) => {
@@ -273,6 +326,7 @@ export class BuiltInSceneViewer {
         });
         btn.classList.toggle('bg-purple-600', this.state.wireframe);
         btn.classList.toggle('text-white', this.state.wireframe);
+        btn.setAttribute('aria-pressed', String(this.state.wireframe));
       } else if (action === 'lighting') {
         this.state.warmLight = !this.state.warmLight;
         if (this.state.warmLight) {
@@ -288,6 +342,7 @@ export class BuiltInSceneViewer {
         }
         btn.classList.toggle('bg-purple-600', this.state.warmLight);
         btn.classList.toggle('text-white', this.state.warmLight);
+        btn.setAttribute('aria-pressed', String(this.state.warmLight));
       }
     });
   }
@@ -315,6 +370,8 @@ export class BuiltInSceneViewer {
   }
 
   destroy() {
+    this.destroyed = true;
+    this.loadGeneration++;
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.resizeObserver?.disconnect();
     this.controls?.dispose();
