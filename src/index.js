@@ -8,7 +8,7 @@ import {
 import { UrlResolver } from './url-resolver.js';
 import { FullscreenController } from './fullscreen-controller.js';
 import { OsdController } from './osd-controller.js';
-import { SidebarPanel } from './sidebar.js';
+import { SidebarPanel, configureExternalViewers } from './sidebar.js';
 import { Filmstrip } from './filmstrip.js';
 import { ManifestSearchController } from './search-controller.js';
 import { renderShell } from './template.js';
@@ -68,6 +68,7 @@ export class IIIFViewer {
       allowManifestDrop: options.allowManifestDrop ?? true,
       showSidebar: options.showSidebar ?? defaultSidebarOpen,
       summaryCollapseLength: options.summaryCollapseLength ?? 300,
+      externalViewers: configureExternalViewers(options.externalViewers),
       height: options.height || '680px',
       initialCanvas: options.initialCanvas || 0,
       fetchOptions: options.fetchOptions || {},
@@ -152,6 +153,7 @@ export class IIIFViewer {
     this.sidebar = new SidebarPanel(this.wrapper, {
       isOpen: this.options.showSidebar,
       summaryCollapseLength: this.options.summaryCollapseLength,
+      externalViewers: this.options.externalViewers,
       onTabChange: () => {
         if (this.sidebar.activeTab !== 'map') {
           this.destroyNavMap();
@@ -168,12 +170,7 @@ export class IIIFViewer {
       onChangeLanguage: (lang) => this.setLanguage(lang),
       onCopyText: (text, btn) => this.copyToClipboard(text, btn),
       onSearch: (q) => this.searchController.search(q, this.state.manifest),
-      onSelectSearchHit: async (hit) => {
-        await this.goToCanvas(hit.canvasIndex);
-        if (hit.xywh && hit.xywh.length === 4) {
-          this.osdController.focusAnnotation({ xywh: hit.xywh });
-        }
-      },
+      onSelectSearchHit: (hit) => this.goToCanvas(hit.canvasIndex, { focusRegion: hit.xywh }),
       onMountMap: (hostEl, featureCollection) => this.mountNavMap(hostEl, featureCollection),
       onPanMap: (x, y) => this.activeNavMap?.panBy(x, y),
       onFocusMapFeature: (feat) => {
@@ -550,7 +547,7 @@ export class IIIFViewer {
     this.activeNavMap = null;
   }
 
-  async goToCanvas(index) {
+  async goToCanvas(index, { focusRegion } = {}) {
     const manifest = this.state.manifest;
     if (!manifest || index < 0 || index >= manifest.canvases.length) return;
 
@@ -564,6 +561,7 @@ export class IIIFViewer {
     const filterBar = this.wrapper.querySelector('[data-el="filter-bar"]');
 
     if (item.kind === 'scene' && item.scene?.modelUrl) {
+      this.osdController.clearAnnotations();
       const focusedControl = zoomControls?.contains(document.activeElement) ||
         filterBar?.contains(document.activeElement);
       osdEl?.classList.add('hidden');
@@ -588,7 +586,13 @@ export class IIIFViewer {
           : null;
 
       if (tileSource) {
-        this.osdController.open(tileSource, item.annotations);
+        if (Array.isArray(focusRegion) && focusRegion.length === 4) {
+          this.osdController.open(tileSource, item.annotations, { xywh: focusRegion });
+        } else {
+          this.osdController.open(tileSource, item.annotations);
+        }
+      } else {
+        this.osdController.clearAnnotations();
       }
     }
 
@@ -635,9 +639,9 @@ export class IIIFViewer {
       const newAnnos = fetched.flat();
       if (newAnnos.length) {
         item.annotations.push(...newAnnos);
-        if (this.state.canvasIndex === item.index) {
+        if (this.state.manifest?.canvases[this.state.canvasIndex] === item) {
           const boxed = item.annotations.filter((a) => Array.isArray(a.xywh) && a.xywh.length === 4);
-          if (boxed.length) {
+          if (boxed.length && item.kind !== 'scene' && (item.image.infoJsonUrl || item.image.staticUrl)) {
             this.osdController.renderAnnotationOverlays(boxed);
           }
           this.renderSidebar();

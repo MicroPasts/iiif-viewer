@@ -6,6 +6,13 @@ export function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+export function getPlainText(htmlOrText) {
+  if (!htmlOrText) return '';
+  const template = document.createElement('template');
+  template.innerHTML = String(htmlOrText);
+  return template.content.textContent || '';
+}
+
 export function sanitizeHtml(dirty) {
   if (!dirty) return '';
   const template = document.createElement('template');

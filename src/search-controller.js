@@ -1,4 +1,9 @@
 import { extractLangValue, parseAnnotationItems } from './parser.js';
+import { getPlainText } from './sanitize.js';
+
+function searchText(value) {
+  return getPlainText(value).replace(/\s+/g, ' ').trim();
+}
 
 export function findSearchService(rawManifest) {
   if (!rawManifest || typeof rawManifest !== 'object') return null;
@@ -91,63 +96,63 @@ export class ManifestSearchController {
       ? data.resources || []
       : data.items || [];
 
-    const parsedAnnos = parseAnnotationItems(rawItems, !this.searchService.isV2);
-
-    return parsedAnnos.map((anno, idx) => {
+    return rawItems.flatMap((rawItem, idx) => {
+      const [anno] = parseAnnotationItems([rawItem], !this.searchService.isV2);
+      if (!anno) return [];
       const targetClean = String(anno.target || '').split('#')[0];
       const canvasIndex = canvasIndexById.has(targetClean)
         ? canvasIndexById.get(targetClean)
         : 0;
 
       // Also check raw item for `on` / `target.source` canvas ID if needed
-      const rawItem = rawItems[idx];
       const fallbackSource =
         rawItem?.target?.source?.id ||
+        rawItem?.target?.source?.['@id'] ||
         rawItem?.target?.source ||
-        (typeof rawItem?.on === 'string' ? rawItem.on.split('#')[0] : rawItem?.on?.full?.split('#')[0]) ||
+        (typeof rawItem?.on === 'string' ? rawItem.on : rawItem?.on?.full) ||
         '';
-      const resolvedCanvasIndex = canvasIndexById.has(fallbackSource)
-        ? canvasIndexById.get(fallbackSource)
+      const fallbackClean = typeof fallbackSource === 'string' ? fallbackSource.split('#')[0] : '';
+      const resolvedCanvasIndex = canvasIndexById.has(fallbackClean)
+        ? canvasIndexById.get(fallbackClean)
         : canvasIndex;
 
       const canvas = parsedManifest?.canvases?.[resolvedCanvasIndex];
       const snippet =
-        rawItem?.body?.value ||
         extractLangValue(rawItem?.body?.value) ||
         anno.text;
 
-      return {
+      return [{
         id: anno.id || `hit-${idx}`,
         canvasIndex: resolvedCanvasIndex,
         canvasLabel: canvas?.label || `Canvas ${resolvedCanvasIndex + 1}`,
         text: snippet,
         xywh: anno.xywh,
         source: 'iiif-search',
-      };
+      }];
     });
   }
 
   searchLocal(query, parsedManifest) {
     if (!parsedManifest) return [];
-    const needle = query.toLowerCase();
+    const needle = query.replace(/\s+/g, ' ').trim().toLowerCase();
     const hits = [];
 
     // 1. Search manifest-level metadata
     const manifestMetaMatches = (parsedManifest.metadata || []).filter(
       (m) =>
-        String(m.label || '').toLowerCase().includes(needle) ||
-        String(m.value || '').toLowerCase().includes(needle)
+        searchText(m.label).toLowerCase().includes(needle) ||
+        searchText(m.value).toLowerCase().includes(needle)
     );
 
     if (
-      String(parsedManifest.label || '').toLowerCase().includes(needle) ||
-      String(parsedManifest.summary || '').toLowerCase().includes(needle) ||
+      searchText(parsedManifest.label).toLowerCase().includes(needle) ||
+      searchText(parsedManifest.summary).toLowerCase().includes(needle) ||
       manifestMetaMatches.length > 0
     ) {
       const detail =
         manifestMetaMatches[0]
-          ? `${manifestMetaMatches[0].label}: ${manifestMetaMatches[0].value.replace(/<[^>]+>/g, '')}`
-          : parsedManifest.summary?.replace(/<[^>]+>/g, '') || parsedManifest.label;
+          ? `${searchText(manifestMetaMatches[0].label)}: ${searchText(manifestMetaMatches[0].value)}`
+          : searchText(parsedManifest.summary) || searchText(parsedManifest.label);
       hits.push({
         id: 'manifest-match',
         canvasIndex: 0,
@@ -160,14 +165,14 @@ export class ManifestSearchController {
 
     // 2. Search each canvas's label, metadata, and annotations
     for (const canvas of parsedManifest.canvases || []) {
-      const labelMatch = String(canvas.label || '').toLowerCase().includes(needle);
+      const labelMatch = searchText(canvas.label).toLowerCase().includes(needle);
       const metaMatch = (canvas.metadata || []).find(
         (m) =>
-          String(m.label || '').toLowerCase().includes(needle) ||
-          String(m.value || '').toLowerCase().includes(needle)
+          searchText(m.label).toLowerCase().includes(needle) ||
+          searchText(m.value).toLowerCase().includes(needle)
       );
       const annoMatches = (canvas.annotations || []).filter((a) =>
-        String(a.text || '').toLowerCase().includes(needle)
+        searchText(a.text).toLowerCase().includes(needle)
       );
 
       for (const anno of annoMatches) {
@@ -175,7 +180,7 @@ export class ManifestSearchController {
           id: anno.id || `${canvas.id}-anno`,
           canvasIndex: canvas.index,
           canvasLabel: canvas.label,
-          text: anno.text.replace(/<[^>]+>/g, '').slice(0, 180),
+          text: searchText(anno.text).slice(0, 180),
           xywh: anno.xywh,
           source: 'local',
         });
@@ -183,8 +188,8 @@ export class ManifestSearchController {
 
       if ((labelMatch || metaMatch) && annoMatches.length === 0) {
         const snippet = metaMatch
-          ? `${metaMatch.label}: ${String(metaMatch.value || '').replace(/<[^>]+>/g, '')}`
-          : canvas.label;
+          ? `${searchText(metaMatch.label)}: ${searchText(metaMatch.value)}`
+          : searchText(canvas.label);
         hits.push({
           id: `${canvas.id}-match`,
           canvasIndex: canvas.index,

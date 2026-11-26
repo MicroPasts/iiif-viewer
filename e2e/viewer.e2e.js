@@ -98,6 +98,14 @@ test('demonstrates independent viewer configuration options', async ({ page }) =
   await expect(minimal.locator('[data-el="sidebar"]')).toBeHidden();
   await minimal.getByRole('button', { name: 'Info', exact: true }).click();
   await expect(minimal.locator('[data-el="sidebar"]')).toBeVisible();
+
+  const noExternal = page.locator('#example-no-external-viewers');
+  await expect(noExternal.locator('[data-el="viewer-root"]')).toHaveCount(0);
+  await page.getByText('Hide external viewer links', { exact: true }).click();
+  await expect(noExternal.locator('[data-el="manifest-title"]')).toHaveText('Caryatid (1816,0610.128)');
+  await expect(noExternal.locator('[data-el="sidebar-content"]')).toContainText('Object Type');
+  await expect(noExternal.locator('[data-el="external-viewers"]')).toHaveCount(0);
+  await expect(noDrop.locator('[data-el="external-viewers"] a')).toHaveCount(2);
 });
 
 test('navigates canvases and changes the display language', async ({ page }) => {
@@ -109,14 +117,128 @@ test('navigates canvases and changes the display language', async ({ page }) => 
   await expect(page.locator('[data-el="sidebar-content"]')).toContainText('Feuille 2');
 });
 
+test('configures external viewer links independently for each instance', async ({ page }) => {
+  await page.evaluate(async () => {
+    const { IIIFViewer } = await import('/src/index.js');
+    for (const [id, externalViewers] of [
+      ['custom-viewer', { mode: 'replace', viewers: [{ label: 'Custom tool', url: 'https://tools.example/view?manifest={manifest}&lang=en' }] }],
+      ['hidden-viewer', false],
+    ]) {
+      const container = document.createElement('div');
+      container.id = id;
+      document.body.append(container);
+      new IIIFViewer(container, { manifest: window.viewer.state.rawManifest, showSidebar: true, externalViewers });
+    }
+  });
+  const custom = page.locator('#custom-viewer [data-el="external-viewers"]');
+  await expect(custom.getByRole('link')).toHaveCount(1);
+  await expect(custom.getByRole('link', { name: /Custom tool/ })).toHaveAttribute(
+    'href', `https://tools.example/view?manifest=${encodeURIComponent('https://example.test/manifest')}&lang=en`
+  );
+  await expect(page.locator('#hidden-viewer [data-el="external-viewers"]')).toHaveCount(0);
+  await expect(page.locator('#viewer [data-el="external-viewers"] a')).toHaveCount(2);
+});
+
 test('searches and opens a matching annotation', async ({ page }) => {
   await page.getByRole('tab', { name: 'Search', exact: true }).click();
-  await page.locator('[data-el="manifest-search-input"]').fill('pottery');
+  await page.locator('[data-el="manifest-search-input"]').fill('Ancient pottery');
   await page.getByRole('button', { name: 'Find', exact: true }).click();
   await expect(page.locator('[data-search-hit-index="0"]')).toContainText('Ancient pottery');
   await page.getByRole('tab', { name: 'Notes (1)' }).click();
   await expect(page.locator('[data-el="sidebar-content"]')).toContainText('Ancient pottery');
   await expect(page.locator('.iiif-anno-overlay')).toBeVisible();
+});
+
+test('keeps the newest remote search active when an earlier request is aborted', async ({ page }) => {
+  await page.evaluate(() => {
+    const fetch = window.fetch;
+    window.searchRequests = {};
+    window.searchRejections = [];
+    window.addEventListener('unhandledrejection', (event) => {
+      window.searchRejections.push(String(event.reason));
+    });
+    window.fetch = (url, options) => {
+      if (!String(url).startsWith('https://example.test/search?')) return fetch(url, options);
+      const query = new URL(url).searchParams.get('q');
+      return new Promise((resolve, reject) => {
+        window.searchRequests[query] = resolve;
+        options.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      });
+    };
+    window.viewer.searchController.setManifest({ service: [{ id: 'https://example.test/search', type: 'SearchService2' }] });
+    window.viewer.renderSidebar();
+  });
+  await page.getByRole('tab', { name: 'Search', exact: true }).click();
+  const input = page.locator('[data-el="manifest-search-input"]');
+  await input.fill('first');
+  await page.getByRole('button', { name: 'Find', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Boolean(window.searchRequests.first))).toBe(true);
+  await input.fill('second');
+  await page.getByRole('button', { name: 'Find', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Boolean(window.searchRequests.second))).toBe(true);
+  await expect(page.locator('[data-el="search-status"]')).toHaveText('Searching manifest.');
+
+  await page.evaluate(() => window.searchRequests.second({
+    ok: true,
+    json: async () => ({ items: [{ body: { value: 'New result' }, target: 'https://example.test/canvas/0' }] }),
+  }));
+  await expect(page.locator('[data-el="search-status"]')).toHaveText('1 match found.');
+  await expect(page.locator('[data-el="search-results"]')).toContainText('New result');
+  expect(await page.evaluate(() => window.searchRejections)).toEqual([]);
+});
+
+test('focuses a search result after its canvas image loads', async ({ page }) => {
+  const image = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    return canvas.toDataURL('image/png');
+  });
+  let releaseImage;
+  const imageReady = new Promise((resolve) => { releaseImage = resolve; });
+  const imageUrl = 'https://example.test/search-image.png';
+  await page.route(imageUrl, async (route) => {
+    await imageReady;
+    await route.fulfill({
+      contentType: 'image/png',
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: Buffer.from(image.split(',')[1], 'base64'),
+    });
+  });
+
+  try {
+    await page.evaluate(({ image, imageUrl }) => window.viewer.setManifest({
+      type: 'Manifest', id: 'https://example.test/search-manifest', label: { en: ['Search book'] },
+      items: [
+        {
+          type: 'Canvas', id: 'https://example.test/page-1', width: 100, height: 100,
+          items: [{ items: [{ motivation: 'painting', body: { id: image, type: 'Image' } }] }],
+        },
+        {
+          type: 'Canvas', id: 'https://example.test/page-2', width: 100, height: 100,
+          items: [{ items: [{ motivation: 'painting', body: { id: imageUrl, type: 'Image' } }] }],
+          annotations: [{ items: [{
+            body: { value: 'Find this region' },
+            target: 'https://example.test/page-2#xywh=10,10,20,20',
+          }] }],
+        },
+      ],
+    }), { image, imageUrl });
+    await page.getByRole('tab', { name: 'Search', exact: true }).click();
+    await page.locator('[data-el="manifest-search-input"]').fill('Find this region');
+    await page.getByRole('button', { name: 'Find', exact: true }).click();
+    await page.locator('[data-search-hit-index="0"]').click();
+    await expect(page.locator('[data-el="canvas-counter"]')).toHaveText('2 / 2');
+    await expect.poll(() => page.evaluate(() => window.viewer.osdController.awaitingImage)).toBe(true);
+
+    releaseImage();
+    await expect.poll(() => page.evaluate(() => {
+      const viewport = window.viewer.osdController.osd.viewport;
+      return viewport.getZoom(true) / viewport.getHomeZoom();
+    })).toBeGreaterThan(1.5);
+  } finally {
+    releaseImage();
+  }
 });
 
 test('hides annotation overlays when the user selects Hide Boxes', async ({ page }) => {
@@ -125,6 +247,52 @@ test('hides annotation overlays when the user selects Hide Boxes', async ({ page
   await page.getByRole('button', { name: 'Hide Boxes' }).click();
   await expect(page.getByRole('button', { name: 'Show Boxes' })).toBeVisible();
   await expect(page.locator('.iiif-anno-overlay')).toBeHidden();
+});
+
+test('shows external annotation boxes when notes load before the image', async ({ page }) => {
+  const imageService = 'https://example.test/slow-image';
+  let releaseImage;
+  const imageReady = new Promise((resolve) => { releaseImage = resolve; });
+  const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+  await page.route(`${imageService}/**`, (route) =>
+    route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel })
+  );
+  await page.route(`${imageService}/info.json`, async (route) => {
+    await imageReady;
+    await route.fulfill({
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      json: {
+        '@context': 'http://iiif.io/api/image/3/context.json',
+        protocol: 'http://iiif.io/api/image',
+        id: imageService, type: 'ImageService3', profile: 'level2', width: 100, height: 100,
+        tiles: [{ width: 100, scaleFactors: [1] }],
+      },
+    });
+  });
+  await page.route('https://example.test/notes', (route) =>
+    route.fulfill({
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      json: { items: [{ body: { value: 'External note' }, target: 'https://example.test/canvas#xywh=10,10,20,20' }] },
+    })
+  );
+
+  try {
+    await page.evaluate((service) => window.viewer.setManifest({
+      type: 'Manifest', id: 'https://example.test/manifest', label: { en: ['Delayed image'] },
+      items: [{
+        type: 'Canvas', id: 'https://example.test/canvas', width: 100, height: 100,
+        items: [{ items: [{ motivation: 'painting', body: { type: 'Image', service: [{ id: service, type: 'ImageService3' }] } }] }],
+        annotations: [{ id: 'https://example.test/notes', type: 'AnnotationPage' }],
+      }],
+    }), imageService);
+    await page.getByRole('tab', { name: 'Notes (1)' }).click();
+    await expect(page.locator('[data-el="sidebar-content"]')).toContainText('External note');
+    await expect(page.locator('.iiif-anno-overlay')).toHaveCount(0);
+    releaseImage();
+    await expect(page.locator('.iiif-anno-overlay')).toBeVisible();
+  } finally {
+    releaseImage();
+  }
 });
 
 test('renders a navPlace point and opens its popup', async ({ page }) => {

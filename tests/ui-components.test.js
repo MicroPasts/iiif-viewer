@@ -51,6 +51,15 @@ describe('sidebar', () => {
       annotations: [{ items: [{ body: { value: '<b>Note</b>' }, target: 'canvas#xywh=1,2,3,4' }] }] }],
   });
 
+  it('uses the loaded URL for external links when the manifest has no ID', () => {
+    const sidebar = new SidebarPanel(wrapper);
+    sidebar.render(manifest, manifest.canvases[0]);
+    expect(wrapper.querySelector('[data-el="external-viewers"]')).toBeNull();
+    sidebar.render(manifest, manifest.canvases[0], { manifestUrl: 'https://example.test/manifest?a=1&b=2' });
+    expect(wrapper.querySelector('[data-el="external-viewers"] a').getAttribute('href'))
+      .toBe(`https://www.universalviewer.dev/#?iiifManifestId=${encodeURIComponent('https://example.test/manifest?a=1&b=2')}`);
+  });
+
   it('toggles visibility and expands a long summary', () => {
     const sidebar = new SidebarPanel(wrapper, { isOpen: true, summaryCollapseLength: 5 });
     sidebar.render(manifest, manifest.canvases[0]);
@@ -114,6 +123,119 @@ describe('sidebar', () => {
     wrapper.querySelector('[data-el="manifest-search-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(wrapper.querySelector('[data-el="search-status"]').textContent).toBe('1 match found.'));
     expect(document.activeElement).toBe(input);
+  });
+
+  it('keeps the newest search loading and results when earlier requests finish out of order', async () => {
+    const pending = [];
+    const sidebar = new SidebarPanel(wrapper, {
+      onSearch: () => new Promise((resolve) => pending.push(resolve)),
+    });
+    sidebar.setTab('search');
+    sidebar.render(manifest, manifest.canvases[0]);
+    const input = wrapper.querySelector('[data-el="manifest-search-input"]');
+    const form = wrapper.querySelector('[data-el="manifest-search-form"]');
+    const submit = (query) => {
+      input.value = query;
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    };
+    submit('first');
+    submit('second');
+    pending[0]([{ canvasLabel: 'Page', canvasIndex: 0, text: 'Old result' }]);
+    await Promise.resolve();
+    expect(sidebar.searching).toBe(true);
+    expect(wrapper.querySelector('[data-el="search-status"]').textContent).toBe('Searching manifest.');
+    pending[1]([{ canvasLabel: 'Page', canvasIndex: 0, text: 'New result' }]);
+    await vi.waitFor(() => expect(sidebar.searching).toBe(false));
+    expect(wrapper.querySelector('[data-el="search-results"]').textContent).toContain('New result');
+
+    submit('third');
+    submit('fourth');
+    pending[3]([{ canvasLabel: 'Page', canvasIndex: 0, text: 'Newest result' }]);
+    await vi.waitFor(() => expect(sidebar.searching).toBe(false));
+    pending[2]([{ canvasLabel: 'Page', canvasIndex: 0, text: 'Stale result' }]);
+    await Promise.resolve();
+    expect(wrapper.querySelector('[data-el="search-results"]').textContent).toContain('Newest result');
+    expect(wrapper.querySelector('[data-el="search-results"]').textContent).not.toContain('Stale result');
+  });
+
+  it.each(['reset', 'empty submission'])('invalidates an outstanding search on %s', async (action) => {
+    let resolveSearch;
+    const sidebar = new SidebarPanel(wrapper, {
+      onSearch: () => new Promise((resolve) => { resolveSearch = resolve; }),
+    });
+    sidebar.setTab('search');
+    sidebar.render(manifest, manifest.canvases[0]);
+    const input = wrapper.querySelector('[data-el="manifest-search-input"]');
+    const form = wrapper.querySelector('[data-el="manifest-search-form"]');
+    input.value = 'first';
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+    if (action === 'reset') {
+      sidebar.resetSearch();
+      sidebar.render(manifest, manifest.canvases[0]);
+    } else {
+      input.value = '';
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    }
+    resolveSearch([{ canvasLabel: 'Page', canvasIndex: 0, text: 'Old result' }]);
+    await Promise.resolve();
+    expect(sidebar.searching).toBe(false);
+    expect(sidebar.searchResults).toEqual([]);
+    expect(wrapper.querySelector('[data-el="search-results"]').textContent).not.toContain('Old result');
+  });
+
+  it('handles cancelled searches without interrupting the current search', async () => {
+    const pending = [];
+    const sidebar = new SidebarPanel(wrapper, {
+      onSearch: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+    });
+    sidebar.setTab('search');
+    sidebar.render(manifest, manifest.canvases[0]);
+    const input = wrapper.querySelector('[data-el="manifest-search-input"]');
+    const form = wrapper.querySelector('[data-el="manifest-search-form"]');
+    input.value = 'first';
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    input.value = 'second';
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    pending[0].reject(new DOMException('Aborted', 'AbortError'));
+    await Promise.resolve();
+    expect(sidebar.searching).toBe(true);
+    pending[1].resolve([{ canvasLabel: 'Page', canvasIndex: 0, text: 'New result' }]);
+    await vi.waitFor(() => expect(sidebar.searching).toBe(false));
+    expect(wrapper.querySelector('[data-el="search-results"]').textContent).toContain('New result');
+  });
+
+  it('reports cancellation of the current search', async () => {
+    const sidebar = new SidebarPanel(wrapper, {
+      onSearch: () => Promise.reject(new DOMException('Aborted', 'AbortError')),
+    });
+    sidebar.setTab('search');
+    sidebar.render(manifest, manifest.canvases[0]);
+    wrapper.querySelector('[data-el="manifest-search-input"]').value = 'query';
+    wrapper.querySelector('[data-el="manifest-search-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(wrapper.querySelector('[data-el="search-status"]').textContent).toBe('Search cancelled.'));
+    expect(sidebar.searching).toBe(false);
+  });
+
+  it('reports an unexpected search error instead of showing an empty result', async () => {
+    const error = new Error('Search failed unexpectedly');
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const onSearch = vi.fn()
+        .mockRejectedValueOnce(error)
+        .mockResolvedValueOnce([{ canvasLabel: 'Page', canvasIndex: 0, text: 'Recovered' }]);
+      const sidebar = new SidebarPanel(wrapper, { onSearch });
+      sidebar.setTab('search');
+      sidebar.render(manifest, manifest.canvases[0]);
+      wrapper.querySelector('[data-el="manifest-search-input"]').value = 'query';
+      wrapper.querySelector('[data-el="manifest-search-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await vi.waitFor(() => expect(wrapper.querySelector('[data-el="search-status"]').textContent).toContain('Search failed'));
+      expect(log).toHaveBeenCalledWith('IIIF search failed:', error);
+      wrapper.querySelector('[data-el="manifest-search-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await vi.waitFor(() => expect(wrapper.querySelector('[data-el="search-results"]').textContent).toContain('Recovered'));
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it('uses unique relationships and independent language labels for multiple viewers', () => {

@@ -385,7 +385,7 @@ function extractAnnotations(canvas, isV3) {
   return { annotations, externalAnnotationUrls };
 }
 
-function buildStructureTree(rawStructures, isV3, canvasIndexById) {
+function buildStructureTree(rawStructures, isV3, canvasIndexById, preferredLang) {
   if (!Array.isArray(rawStructures) || !rawStructures.length) return [];
 
   const rangeMap = new Map();
@@ -394,18 +394,22 @@ function buildStructureTree(rawStructures, isV3, canvasIndexById) {
     if (id) rangeMap.set(id, r);
   });
 
-  const resolveCanvasIndex = (range) => {
-    const targets = isV3
-      ? (range.items || []).map((i) => (typeof i === 'string' ? i : i.id || ''))
-      : range.canvases || [];
+  const resolveCanvasIndex = (range, ancestors = new Set()) => {
+    if (ancestors.has(range)) return null;
+    const visited = new Set(ancestors);
+    visited.add(range);
+    const targets = isV3 ? range.items || [] : range.canvases || [];
 
-    for (const t of targets) {
-      const cleanId = t.split('#')[0];
+    for (const target of targets) {
+      const id = typeof target === 'string' ? target : target?.id || target?.['@id'] || '';
+      const cleanId = id.split('#')[0];
       if (canvasIndexById.has(cleanId)) {
         return canvasIndexById.get(cleanId);
       }
-      if (rangeMap.has(cleanId)) {
-        const nestedIdx = resolveCanvasIndex(rangeMap.get(cleanId));
+      const embeddedRange = target?.type === 'Range' && Array.isArray(target.items) ? target : null;
+      const nestedRange = embeddedRange || rangeMap.get(cleanId);
+      if (nestedRange) {
+        const nestedIdx = resolveCanvasIndex(nestedRange, visited);
         if (nestedIdx !== null) return nestedIdx;
       }
     }
@@ -454,7 +458,7 @@ function buildStructureTree(rawStructures, isV3, canvasIndexById) {
     return {
       id,
       rawLabel: range.label,
-      label: extractLangValue(range.label) || 'Section',
+      label: extractLangValue(range.label, preferredLang) || 'Section',
       canvasIndex: canvasIndex ?? children[0]?.canvasIndex ?? 0,
       children,
     };
@@ -626,7 +630,7 @@ export function parseIIIFManifest(manifest, preferredLang = 'en') {
         );
 
   const canvasIndexById = new Map(canvases.map((c) => [c.id.split('#')[0], c.index]));
-  const structures = buildStructureTree(manifest.structures || [], isV3, canvasIndexById);
+  const structures = buildStructureTree(manifest.structures || [], isV3, canvasIndexById, preferredLang);
   const hasScenes = canvases.some((c) => c.kind === 'scene');
 
   return {

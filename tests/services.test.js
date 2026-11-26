@@ -46,6 +46,58 @@ describe('manifest search', () => {
     expect(hits[0]).toMatchObject({ id: 'hit', canvasIndex: 0, xywh: [1, 2, 3, 4], source: 'iiif-search' });
   });
 
+  it.each([
+    {
+      service: { id: '/search', type: 'SearchService2' },
+      response: { items: [
+        { body: { type: 'Image' }, target: { source: 'canvas-2' } },
+        { id: 'hit', body: { value: { en: ['Correct result'] } }, target: { source: { id: 'canvas-1' }, selector: { value: 'xywh=1,2,3,4' } } },
+      ] },
+    },
+    {
+      service: { '@id': '/search', '@type': 'sc:SearchService' },
+      response: { resources: [
+        { resource: { type: 'Image' }, on: 'canvas-2' },
+        { '@id': 'hit', resource: { chars: 'Correct result' }, on: { full: 'canvas-1#xywh=1,2,3,4' } },
+      ] },
+    },
+  ])('keeps remote hits paired with their source items: $service', async ({ service, response }) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => response }));
+    const search = new ManifestSearchController();
+    search.setManifest({ service });
+    const hits = await search.search('result', {
+      ...parsed,
+      canvases: [...parsed.canvases, { id: 'canvas-2', index: 1, label: 'Other page' }],
+    });
+    expect(hits).toMatchObject([{
+      id: 'hit', canvasIndex: 0, canvasLabel: 'Page',
+      text: 'Correct result', xywh: [1, 2, 3, 4],
+    }]);
+  });
+
+  it.each([
+    { field: 'annotation', manifest: { ...parsed } },
+    { field: 'summary', manifest: { ...parsed, summary: '<b>Ancient</b> pottery', canvases: [] } },
+    { field: 'manifest metadata value', manifest: { ...parsed, metadata: [{ label: 'Period', value: '<b>Ancient</b> pottery' }], canvases: [] } },
+    { field: 'manifest metadata label', manifest: { ...parsed, metadata: [{ label: '<b>Ancient</b> pottery', value: 'Yes' }], canvases: [] } },
+    { field: 'canvas metadata value', manifest: { ...parsed, canvases: [{ ...parsed.canvases[0], annotations: [], metadata: [{ label: 'Period', value: '<b>Ancient</b> pottery' }] }] } },
+    { field: 'canvas metadata label', manifest: { ...parsed, canvases: [{ ...parsed.canvases[0], annotations: [], metadata: [{ label: '<b>Ancient</b> pottery', value: 'Yes' }] }] } },
+  ])('matches visible text in $field', async ({ manifest }) => {
+    const search = new ManifestSearchController();
+    const hits = await search.search('ancient pottery', manifest);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].text).toContain('Ancient pottery');
+    expect(await search.search('b>', manifest)).toEqual([]);
+  });
+
+  it('decodes HTML entities when matching and displaying local search snippets', async () => {
+    const search = new ManifestSearchController();
+    const hits = await search.search('ART & HISTORY', {
+      ...parsed, summary: '<strong>Art &amp;</strong> history', canvases: [],
+    });
+    expect(hits[0].text).toBe('Art & history');
+  });
+
   it('falls back to local search when the remote service fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
     const search = new ManifestSearchController();

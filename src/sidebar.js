@@ -1,16 +1,48 @@
-import { escapeHtml, sanitizeHtml } from './sanitize.js';
+import { escapeHtml, getPlainText, sanitizeHtml } from './sanitize.js';
+
+const defaultExternalViewers = [
+  { label: 'Universal Viewer', url: 'https://www.universalviewer.dev/#?iiifManifestId={manifest}' },
+  { label: 'Tify', url: 'https://tify.rocks/?manifest={manifest}' },
+];
+
+export function configureExternalViewers(option) {
+  if (option === undefined) return defaultExternalViewers;
+  if (option === false) return [];
+  if (!option || typeof option !== 'object' || Array.isArray(option)) {
+    throw new TypeError('externalViewers must be false or an object with mode and viewers.');
+  }
+  const { mode = 'append', viewers = [] } = option;
+  if (!['append', 'replace'].includes(mode) || !Array.isArray(viewers)) {
+    throw new TypeError('externalViewers requires an append or replace mode and a viewers array.');
+  }
+  for (const viewer of viewers) {
+    if (!viewer || typeof viewer.label !== 'string' || !viewer.label.trim() ||
+        typeof viewer.url !== 'string' || !viewer.url.includes('{manifest}')) {
+      throw new TypeError('Each external viewer requires a label and a URL containing {manifest}.');
+    }
+    let url;
+    try {
+      url = new URL(viewer.url.replaceAll('{manifest}', encodeURIComponent('https://example.org/manifest')));
+    } catch {
+      throw new TypeError('External viewer URLs must be valid HTTP or HTTPS URLs.');
+    }
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new TypeError('External viewer URLs must be valid HTTP or HTTPS URLs.');
+    }
+  }
+  const customViewers = viewers.map(({ label, url }) => ({ label, url }));
+  return mode === 'append' ? [...defaultExternalViewers, ...customViewers] : customViewers;
+}
 
 function getPlainTextLength(htmlOrText) {
-  if (!htmlOrText) return 0;
-  const div = document.createElement('div');
-  div.innerHTML = String(htmlOrText);
-  return (div.textContent || div.innerText || '').trim().length;
+  return getPlainText(htmlOrText).trim().length;
 }
 
 export class SidebarPanel {
   constructor(wrapper, {
     isOpen = true,
     summaryCollapseLength = 300,
+    externalViewers = defaultExternalViewers,
     onTabChange = () => {},
     onSelectCanvas = () => {},
     onFocusAnnotation = () => {},
@@ -29,6 +61,7 @@ export class SidebarPanel {
       typeof summaryCollapseLength === 'number' && summaryCollapseLength > 0
         ? summaryCollapseLength
         : null;
+    this.externalViewers = externalViewers;
     this.activeTab = 'metadata';
     this.annotationsVisible = true;
     this.summaryExpanded = false;
@@ -37,6 +70,8 @@ export class SidebarPanel {
     this.searchQuery = '';
     this.searchResults = [];
     this.searching = false;
+    this.searchError = '';
+    this.searchGeneration = 0;
     this.hasRemoteSearch = false;
     this.currentNavFeatures = [];
 
@@ -58,9 +93,11 @@ export class SidebarPanel {
   }
 
   resetSearch() {
+    this.searchGeneration += 1;
     this.searchQuery = '';
     this.searchResults = [];
     this.searching = false;
+    this.searchError = '';
   }
 
   bindEvents() {
@@ -154,19 +191,32 @@ export class SidebarPanel {
       if (e.target.matches('[data-el="manifest-search-form"]')) {
         e.preventDefault();
         const input = sidebar.querySelector('[data-el="manifest-search-input"]');
+        const generation = ++this.searchGeneration;
         this.searchQuery = (input?.value || '').trim();
+        this.searchResults = [];
+        this.searchError = '';
         if (!this.searchQuery) {
-          this.searchResults = [];
+          this.searching = false;
           this.renderSearchTab();
           return;
         }
         this.searching = true;
         this.renderSearchTab();
         try {
-          this.searchResults = await this.onSearch(this.searchQuery);
+          const results = await this.onSearch(this.searchQuery);
+          if (generation === this.searchGeneration) this.searchResults = results;
+        } catch (error) {
+          if (error?.name !== 'AbortError') console.error('IIIF search failed:', error);
+          if (generation === this.searchGeneration) {
+            this.searchError = error?.name === 'AbortError'
+              ? 'Search cancelled.'
+              : 'Search failed. Please try again.';
+          }
         } finally {
-          this.searching = false;
-          this.renderSearchTab();
+          if (generation === this.searchGeneration) {
+            this.searching = false;
+            this.renderSearchTab();
+          }
         }
       }
     });
@@ -337,10 +387,12 @@ export class SidebarPanel {
 
     let resultsHtml = '';
     const status = this.searching ? 'Searching manifest.'
-      : !this.searchQuery ? ''
-        : `${this.searchResults.length} match${this.searchResults.length === 1 ? '' : 'es'} found.`;
+      : this.searchError || (!this.searchQuery ? ''
+        : `${this.searchResults.length} match${this.searchResults.length === 1 ? '' : 'es'} found.`);
     if (this.searching) {
       resultsHtml = `<p class="text-slate-500 dark:text-slate-400 italic">Searching manifest...</p>`;
+    } else if (this.searchError) {
+      resultsHtml = `<p class="text-red-700 dark:text-red-300">${escapeHtml(this.searchError)}</p>`;
     } else if (!this.searchQuery) {
       resultsHtml = `<p class="text-slate-500 dark:text-slate-400 text-[11px]">Search titles, metadata, notes, and transcriptions across this manifest.</p>`;
     } else if (!this.searchResults.length) {
@@ -467,16 +519,14 @@ export class SidebarPanel {
       : '';
 
     const sourceUri = manifest.id || manifestUrl;
-    const externalViewersHtml = sourceUri
-      ? `<div class="space-y-1.5">
+    const externalViewersHtml = sourceUri && this.externalViewers.length
+      ? `<div data-el="external-viewers" class="space-y-1.5">
           <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 block">Open in Other IIIF Tools</span>
           <div class="flex flex-wrap gap-1.5">
-            <a href="https://www.universalviewer.dev/#?iiifManifestId=${encodeURIComponent(sourceUri)}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[10px] font-medium text-cyan-700 dark:text-cyan-400 hover:border-cyan-500/50 transition">
-              Universal Viewer &nearr;
-            </a>
-            <a href="https://tify.rocks/?manifest=${encodeURIComponent(sourceUri)}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[10px] font-medium text-cyan-700 dark:text-cyan-400 hover:border-cyan-500/50 transition">
-              Tify &nearr;
-            </a>
+            ${this.externalViewers.map(({ label, url }) => `
+              <a href="${escapeHtml(url.replaceAll('{manifest}', encodeURIComponent(sourceUri)))}" target="_blank" rel="noopener noreferrer" class="px-2 py-1 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[10px] font-medium text-cyan-700 dark:text-cyan-400 hover:border-cyan-500/50 transition">
+                ${escapeHtml(label)} &nearr;
+              </a>`).join('')}
           </div>
         </div>`
       : '';

@@ -5,6 +5,11 @@ export class OsdController {
     this.element = element;
     this.onAnnotationClick = onAnnotationClick;
     this.overlays = [];
+    this.pendingAnnotationHandler = null;
+    this.pendingAnnotations = [];
+    this.pendingFocus = null;
+    this.imageGeneration = 0;
+    this.awaitingImage = false;
     this.showAnnotations = true;
     this.filters = {
       brightness: 100,
@@ -27,19 +32,48 @@ export class OsdController {
     this.osd.canvas.setAttribute('aria-label', 'Image viewer. Use arrow keys to pan and plus or minus to zoom.');
   }
 
-  open(tileSource, annotations = []) {
-    this.clearOverlays();
+  open(tileSource, annotations = [], focusAnnotation = null) {
+    this.clearAnnotations();
+    const generation = this.imageGeneration;
+    this.pendingAnnotations = annotations.filter((a) => Array.isArray(a.xywh) && a.xywh.length === 4);
+    this.pendingFocus = focusAnnotation;
+    this.awaitingImage = true;
+    const handler = () => {
+      if (this.pendingAnnotationHandler !== handler) return;
+      this.cancelPendingAnnotationHandler();
+      this.awaitingImage = false;
+      const annotations = this.pendingAnnotations;
+      this.pendingAnnotations = [];
+      const focus = this.pendingFocus;
+      this.pendingFocus = null;
+      this.renderAnnotationOverlays(annotations);
+      if (focus && this.imageGeneration === generation) this.focusAnnotation(focus);
+    };
+    this.pendingAnnotationHandler = handler;
+    this.osd.addHandler('open', handler);
     this.osd.open(tileSource);
+  }
 
-    const annoWithBoxes = annotations.filter((a) => Array.isArray(a.xywh) && a.xywh.length === 4);
-    if (annoWithBoxes.length) {
-      this.osd.addOnceHandler('open', () => {
-        this.renderAnnotationOverlays(annoWithBoxes);
-      });
-    }
+  clearAnnotations() {
+    this.imageGeneration += 1;
+    this.cancelPendingAnnotationHandler();
+    this.pendingAnnotations = [];
+    this.pendingFocus = null;
+    this.awaitingImage = false;
+    this.clearOverlays();
+  }
+
+  cancelPendingAnnotationHandler() {
+    if (!this.pendingAnnotationHandler) return;
+    this.osd.removeHandler('open', this.pendingAnnotationHandler);
+    this.pendingAnnotationHandler = null;
   }
 
   renderAnnotationOverlays(annotations) {
+    if (this.awaitingImage) {
+      this.pendingAnnotations = annotations;
+      return;
+    }
     this.clearOverlays();
     const tiledImage = this.osd.world.getItemAt(0);
     if (!tiledImage) return;
@@ -71,6 +105,10 @@ export class OsdController {
 
   focusAnnotation(anno) {
     if (!anno?.xywh || anno.xywh.length !== 4) return;
+    if (this.awaitingImage) {
+      this.pendingFocus = anno;
+      return;
+    }
     const tiledImage = this.osd.world.getItemAt(0);
     if (!tiledImage) return;
 
@@ -160,7 +198,7 @@ export class OsdController {
   }
 
   destroy() {
-    this.clearOverlays();
+    this.clearAnnotations();
     this.osd?.destroy();
   }
 }

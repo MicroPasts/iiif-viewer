@@ -64,7 +64,7 @@
       <section id="configuration-examples" aria-labelledby="examples-heading" class="space-y-4 pt-6">
         <div>
           <h2 id="examples-heading" class="text-xl font-bold">Configuration examples</h2>
-          <p class="text-sm text-slate-600">Open an example to load a separate viewer using a local copy of the British Museum's Caryatid manifest. Images are served by the British Museum.</p>
+          <p class="text-sm text-slate-600">Open an example to load a separate viewer using a local copy of a mocked up version of what could be the British Museum's Caryatid manifest. Images are served by the British Museum.</p>
         </div>
 
         <details class="rounded-lg border border-slate-300 bg-white p-4">
@@ -102,6 +102,18 @@
   showSidebar: false,
 });</code></pre>
             <div id="example-minimal"></div>
+          </div>
+        </details>
+
+        <details class="rounded-lg border border-slate-300 bg-white p-4">
+          <summary class="cursor-pointer font-semibold">Hide external viewer links</summary>
+          <div class="space-y-3 pt-3">
+            <p class="text-sm">The Metadata tab remains available without links to external IIIF tools.</p>
+            <pre class="overflow-auto rounded bg-slate-900 p-3 text-xs text-white"><code>new IIIFViewer('#example-no-external-viewers', {
+  manifestUrl: './examples/caryatid-manifest.json',
+  externalViewers: false,
+});</code></pre>
+            <div id="example-no-external-viewers"></div>
           </div>
         </details>
       </section>
@@ -149,6 +161,7 @@
           allowManifestDrop: false,
           showSidebar: false,
         },
+        'example-no-external-viewers': { externalViewers: false },
       };
 
       for (const [id, options] of Object.entries(exampleOptions)) {

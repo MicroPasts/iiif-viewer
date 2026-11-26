@@ -45,6 +45,56 @@ describe('IIIF parser', () => {
     expect(extractLangValue({ none: ['Unlabelled'] }, 'de')).toBe('Unlabelled');
   });
 
+  it('resolves embedded ranges in item order and localizes every range', () => {
+    const parsed = parseIIIFManifest({
+      type: 'Manifest',
+      items: [{ id: 'canvas-1', type: 'Canvas' }, { id: 'canvas-2', type: 'Canvas' }],
+      structures: [{
+        id: 'parent', type: 'Range', label: { en: ['Parent'], fr: ['Parent français'] },
+        items: [
+          {
+            id: 'child', type: 'Range', label: { en: ['Child'], fr: ['Enfant'] },
+            items: [{ type: 'Range', label: { en: ['Inner'], fr: ['Interieur'] }, items: ['canvas-2#xywh=1,2,3,4'] }],
+          },
+          'canvas-1',
+        ],
+      }],
+    }, 'fr');
+    expect(parsed.structures).toMatchObject([{
+      label: 'Parent français', canvasIndex: 1,
+      children: [{ label: 'Enfant', canvasIndex: 1, children: [{ label: 'Interieur', canvasIndex: 1 }] }],
+    }]);
+  });
+
+  it('resolves referenced ranges without looping on cyclic references', () => {
+    const parsed = parseIIIFManifest({
+      type: 'Manifest',
+      items: [{ id: 'canvas-1', type: 'Canvas' }, { id: 'canvas-2', type: 'Canvas' }],
+      structures: [
+        { id: 'root', type: 'Range', items: ['first', 'canvas-1'] },
+        { id: 'first', type: 'Range', items: ['second'] },
+        { id: 'second', type: 'Range', items: ['first', 'canvas-2'] },
+      ],
+    });
+    expect(parsed.structures[0]).toMatchObject({
+      id: 'root', canvasIndex: 1,
+      children: [{ id: 'first', canvasIndex: 1, children: [{ id: 'second', canvasIndex: 1 }] }],
+    });
+  });
+
+  it('uses the preferred language for Presentation 2 range labels', () => {
+    const parsed = parseIIIFManifest({
+      '@context': 'http://iiif.io/api/presentation/2/context.json',
+      sequences: [{ canvases: [{ '@id': 'canvas-1' }] }],
+      structures: [{
+        '@id': 'section',
+        label: [{ '@language': 'en', '@value': 'Chapter' }, { '@language': 'fr', '@value': 'Chapitre' }],
+        canvases: ['canvas-1'],
+      }],
+    }, 'fr');
+    expect(parsed.structures[0]).toMatchObject({ label: 'Chapitre', canvasIndex: 0 });
+  });
+
   it('normalizes 3D scenes and their transformations', () => {
     const parsed = parseIIIFManifest({
       '@context': 'http://iiif.io/api/presentation/4/context.json', type: 'Manifest',

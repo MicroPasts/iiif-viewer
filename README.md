@@ -34,7 +34,7 @@ A framework-agnostic **IIIF Presentation API 2.x, 3.0 & 4.0** viewer built with 
 * **Metadata:** View the manifest summary, metadata, attribution, rights, related links, and technical details. Long summaries can be expanded. The language selector is offered when multiple languages are found in the manifest label, summary, or metadata.
 * **Index:** Navigate supported structural ranges and nested ranges by selecting an entry.
 * **Notes:** Read annotations for the current canvas. Select **Zoom region** for supported `xywh` regions, or use **Hide Boxes** / **Show Boxes** to toggle their overlays. Referenced annotation pages are fetched when their canvas is opened.
-* **Search:** Search through a detected IIIF Search API service when available. If no service is detected or its request fails, search locally through manifest and canvas labels, metadata, and loaded annotations. Local search does not fetch annotation pages from unvisited canvases; an empty response from a working remote service does not trigger a local search.
+* **Search:** Search through a detected IIIF Search API service when available. If no service is detected or its request fails, search locally through manifest and canvas labels, metadata, and loaded annotations. Local search matches text without HTML formatting and does not fetch annotation pages from unvisited canvases; an empty response from a working remote service does not trigger a local search.
 * **Map:** View and select geographic locations from the manifest and current canvas.
 
 ### Maps
@@ -122,7 +122,25 @@ The manifest and its resources must be accessible to the browser, including any 
 
 Drag-and-drop is enabled by default, independently of the URL bar. Disabling it only prevents manifest drops; image and model drag controls still work, and your application can still call `viewer.loadManifest(url)`. These options are not access controls. The preset buttons in the demo are part of the demo page, not the viewer; omit them from your page if they are not needed.
 
-For interactive examples, open [Configuration examples in the demo](https://micropasts.github.io/iiif-viewer/#configuration-examples). They show the URL bar hidden, manifest drops disabled, and a combination with the sidebar initially closed. `showSidebar: false` does not remove the sidebar; the Info button can still open it. The examples use a [local copy of the supplied Caryatid manifest](./public/examples/caryatid-manifest.json); images are served by the British Museum and remain subject to the rights statement in the manifest.
+For interactive examples, open [Configuration examples in the demo](https://micropasts.github.io/iiif-viewer/#configuration-examples). They show the URL bar hidden, manifest drops disabled, a combination with the sidebar initially closed, and external viewer links hidden. `showSidebar: false` does not remove the sidebar; the Info button can still open it. The examples use a [local copy of the supplied Caryatid manifest](./public/examples/caryatid-manifest.json); images are served by the British Museum and remain subject to the rights statement in the manifest.
+
+### Configure external viewer links
+
+The Metadata tab links to Universal Viewer and Tify by default. Add other services using URL templates containing `{manifest}`:
+
+```js
+const viewer = new IIIFViewer('#iiif-viewer', {
+  manifestUrl: 'https://example.org/manifest.json',
+  externalViewers: {
+    mode: 'append', // use 'replace' to omit the default links
+    viewers: [
+      { label: 'My IIIF tool', url: 'https://example.org/viewer?manifest={manifest}' },
+    ],
+  },
+});
+```
+
+Each `{manifest}` is replaced with the URL-encoded manifest ID, or the loaded URL when the manifest has no ID. Templates must be absolute HTTP or HTTPS URLs. `mode` defaults to `'append'`. To hide the entire section, set `externalViewers: false` (or use `'replace'` with an empty `viewers` array). The section is also hidden when neither a manifest ID nor a loaded URL is available.
 
 ### Language and selection callbacks
 
@@ -305,6 +323,7 @@ onBeforeUnmount(() => viewer?.destroy());
 | `showUrlInput` | `boolean` | `true` | Shows or hides the manifest URL input bar in the top toolbar. |
 | `allowManifestDrop` | `boolean` | `true` | Allows manifest URLs or IIIF links to be dropped onto the viewer for loading. |
 | `showSidebar` | `boolean` | `true` at widths ≥ 768px; otherwise `false` | Initial visibility of the Metadata / Index / Notes / Search / Map sidebar. |
+| `externalViewers` | `false \| object` | Universal Viewer and Tify | Hide, append to, or replace links in the Metadata tab. See [Configure external viewer links](#configure-external-viewer-links). |
 | `initialCanvas` | `number` | `0` | Zero-based index of the initial canvas or 3D scene to display. |
 | `fetchOptions` | `RequestInit` | `{}` | Optional manifest and search `fetch` options (such as `credentials` or custom `headers`); the viewer supplies its own abort signal. |
 | `onSelectScene` | `function` | `null` | Optional callback `(container, sceneData, meta) => instance` for custom 3D scene rendering. |

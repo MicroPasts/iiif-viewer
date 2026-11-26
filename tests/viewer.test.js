@@ -6,6 +6,8 @@ vi.mock('../src/osd-controller.js', () => ({
   OsdController: class {
     constructor() {
       this.open = vi.fn(); this.destroy = vi.fn(); this.resize = vi.fn();
+      this.clearAnnotations = vi.fn(); this.renderAnnotationOverlays = vi.fn();
+      this.focusAnnotation = vi.fn();
       this.zoomBy = vi.fn(); this.goHome = vi.fn(); this.rotateBy = vi.fn(); this.panBy = vi.fn();
       this.filters = { brightness: 100, contrast: 100, invert: false, grayscale: false };
       this.setFilter = vi.fn(); this.resetFilters = vi.fn();
@@ -65,6 +67,55 @@ describe('IIIF viewer', () => {
     expect(container.children).toHaveLength(0);
   });
 
+  it('initially renders index range labels in the selected language', () => {
+    viewer = new IIIFViewer(container, {
+      manifest: {
+        ...manifest,
+        structures: [{ id: 'chapter', type: 'Range', label: { en: ['Chapter'], fr: ['Chapitre'] }, items: ['https://example.test/canvas/0'] }],
+      },
+      language: 'fr',
+      showSidebar: true,
+    });
+    container.querySelector('[data-tab="structures"]').click();
+    expect(container.querySelector('[data-el="sidebar-content"]').textContent).toContain('Chapitre');
+  });
+
+  it.each([
+    { externalViewers: undefined, labels: ['Universal Viewer', 'Tify'] },
+    { externalViewers: { mode: 'append', viewers: [{ label: 'Custom <viewer>', url: 'https://tools.example/view?iiif={manifest}&other=1' }] }, labels: ['Universal Viewer', 'Tify', 'Custom <viewer>'] },
+    { externalViewers: { mode: 'replace', viewers: [{ label: 'Custom <viewer>', url: 'https://tools.example/view?iiif={manifest}&other=1' }] }, labels: ['Custom <viewer>'] },
+    { externalViewers: false, labels: [] },
+    { externalViewers: { mode: 'replace', viewers: [] }, labels: [] },
+  ])('configures external viewer links: $externalViewers', ({ externalViewers, labels }) => {
+    const manifestId = 'https://example.test/manifest?a=1&b=two';
+    viewer = new IIIFViewer(container, { manifest: { ...manifest, id: manifestId }, externalViewers });
+    const content = container.querySelector('[data-el="sidebar-content"]');
+    const links = [...content.querySelectorAll('[data-el="external-viewers"] a')];
+    expect(links.map((link) => link.textContent.trim().slice(0, -2))).toEqual(labels);
+    expect(content.textContent.includes('Open in Other IIIF Tools')).toBe(labels.length > 0);
+    if (externalViewers?.mode === 'replace') expect(content.textContent).not.toContain('Universal Viewer');
+    const custom = links.find((link) => link.textContent.includes('Custom'));
+    if (custom) {
+      expect(custom.getAttribute('href')).toBe(`https://tools.example/view?iiif=${encodeURIComponent(manifestId)}&other=1`);
+      expect(custom.querySelector('viewer')).toBeNull();
+      expect(custom.getAttribute('rel')).toBe('noopener noreferrer');
+    }
+    if (externalViewers === undefined) {
+      expect(links[0].getAttribute('href')).toBe(`https://www.universalviewer.dev/#?iiifManifestId=${encodeURIComponent(manifestId)}`);
+      expect(links[1].getAttribute('href')).toBe(`https://tify.rocks/?manifest=${encodeURIComponent(manifestId)}`);
+    }
+  });
+
+  it.each([
+    { mode: 'unknown', viewers: [] },
+    { mode: 'append', viewers: 'invalid' },
+    { viewers: [{ label: 'Unsafe', url: 'javascript:alert({manifest})' }] },
+    { viewers: [{ label: 'Missing placeholder', url: 'https://example.test/' }] },
+  ])('rejects invalid external viewer configuration', (externalViewers) => {
+    expect(() => new IIIFViewer(container, { externalViewers })).toThrow(/external ?viewer/i);
+    expect(container.children).toHaveLength(0);
+  });
+
   it('fetches through the resolver and displays HTTP errors', async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => manifest })
@@ -77,6 +128,51 @@ describe('IIIF viewer', () => {
     await viewer.loadManifest('https://example.test/missing');
     expect(container.querySelector('[data-el="error-box"]').textContent).toContain('HTTP 404');
     expect(container.querySelector('[role="alert"]').textContent).toContain('HTTP 404');
+  });
+
+  it.each(['current canvas', 'different canvas', 'different manifest'])(
+    'applies external annotations only to the current canvas: %s',
+    async (destination) => {
+      let resolveFetch;
+      vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { resolveFetch = resolve; })));
+      viewer = new IIIFViewer(container, { manifest });
+      const item = viewer.state.manifest.canvases[0];
+      item.externalAnnotationUrls = ['https://example.test/annotations'];
+      const request = viewer.loadExternalAnnotations(item, true);
+
+      if (destination === 'different canvas') await viewer.goToCanvas(1);
+      if (destination === 'different manifest') await viewer.setManifest(manifest);
+
+      resolveFetch({
+        ok: true,
+        json: async () => ({
+          items: [{ body: { value: 'External note' }, target: 'https://example.test/canvas/0#xywh=1,2,3,4' }],
+        }),
+      });
+      await request;
+      expect(item.annotations).toEqual([expect.objectContaining({ text: 'External note', xywh: [1, 2, 3, 4] })]);
+      if (destination === 'current canvas') {
+        expect(mocks.osd.renderAnnotationOverlays).toHaveBeenCalledWith(item.annotations);
+      } else {
+        expect(mocks.osd.renderAnnotationOverlays).not.toHaveBeenCalled();
+      }
+    }
+  );
+
+  it('binds search-hit focus to its canvas before waiting for external annotations', async () => {
+    let resolveFetch;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { resolveFetch = resolve; })));
+    viewer = new IIIFViewer(container, { manifest });
+    viewer.state.manifest.canvases[1].externalAnnotationUrls = ['https://example.test/annotations'];
+
+    const navigation = viewer.sidebar.onSelectSearchHit({ canvasIndex: 1, xywh: [1, 2, 3, 4] });
+    expect(mocks.osd.open).toHaveBeenLastCalledWith(
+      { type: 'image', url: 'https://example.test/image/1.jpg' }, [], { xywh: [1, 2, 3, 4] }
+    );
+    await viewer.goToCanvas(0);
+    resolveFetch({ ok: true, json: async () => ({ items: [] }) });
+    await navigation;
+    expect(mocks.osd.focusAnnotation).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -137,6 +233,7 @@ describe('IIIF viewer', () => {
     toggle.click();
     bar.querySelector('[data-filter="brightness"]').focus();
     await viewer.goToCanvas(1);
+    expect(mocks.osd.clearAnnotations).toHaveBeenCalled();
     expect(controls.classList.contains('hidden')).toBe(true);
     expect(controls.classList.contains('inline-flex')).toBe(false);
     expect(bar.classList.contains('hidden')).toBe(true);
