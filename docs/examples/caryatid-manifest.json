@@ -1,6 +1,6 @@
 {
   "@context": "http://iiif.io/api/presentation/3/context.json",
-  "id": "https://www.britishmuseum.org/collection/object/G_1816-0610-128/manifest.json",
+  "id": "https://micropasts.github.io/iiif-viewer/examples/caryatid-manifest.json",
   "type": "Manifest",
   "label": {
     "en": ["Caryatid (1816,0610.128)"]
