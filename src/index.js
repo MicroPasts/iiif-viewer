@@ -12,6 +12,7 @@ import { SidebarPanel, configureExternalViewers } from './sidebar.js';
 import { Filmstrip } from './filmstrip.js';
 import { ManifestSearchController } from './search-controller.js';
 import { renderShell } from './template.js';
+import { InspectionTools } from './inspection-tools.js';
 
 function extractDroppedManifestUrl(dataTransfer) {
   if (!dataTransfer) return null;
@@ -68,6 +69,8 @@ export class IIIFViewer {
       allowManifestDrop: options.allowManifestDrop ?? true,
       showSidebar: options.showSidebar ?? defaultSidebarOpen,
       summaryCollapseLength: options.summaryCollapseLength ?? 300,
+      physicalRuler: options.physicalRuler ?? false,
+      layersCurtain: options.layersCurtain ?? false,
       externalViewers: configureExternalViewers(options.externalViewers),
       height: options.height || '680px',
       initialCanvas: options.initialCanvas || 0,
@@ -150,6 +153,8 @@ export class IIIFViewer {
       }
     );
 
+    this.createInspectionTools();
+
     this.sidebar = new SidebarPanel(this.wrapper, {
       isOpen: this.options.showSidebar,
       summaryCollapseLength: this.options.summaryCollapseLength,
@@ -193,6 +198,31 @@ export class IIIFViewer {
     });
 
     this.bindEvents();
+  }
+
+  createInspectionTools() {
+    if (!this.options.physicalRuler && !this.options.layersCurtain) return;
+    this.inspectionTools = new InspectionTools(this.wrapper, this.osdController.osd, {
+      ruler: this.options.physicalRuler,
+      curtain: this.options.layersCurtain,
+      resolveUrl: (url, type) => this.resolveUrl(url, type),
+    });
+  }
+
+  setInspectionTools({ physicalRuler = this.options.physicalRuler, layersCurtain = this.options.layersCurtain } = {}) {
+    if (physicalRuler === this.options.physicalRuler && layersCurtain === this.options.layersCurtain) return;
+    const hadFocus = this.wrapper.querySelector('[data-el="inspection-tools"]')?.contains(document.activeElement) ||
+      this.wrapper.querySelector('[data-el="inspection-buttons"]')?.contains(document.activeElement);
+    this.inspectionTools?.destroy();
+    this.inspectionTools = null;
+    this.options.physicalRuler = physicalRuler;
+    this.options.layersCurtain = layersCurtain;
+    this.createInspectionTools();
+    if (this.inspectionTools && this.state.manifest) {
+      this.inspectionTools.setCanvas(this.state.manifest, this.state.canvasIndex);
+      if (!this.osdController.awaitingImage) this.inspectionTools.imageOpened();
+    }
+    if (hadFocus) this.wrapper.querySelector('[data-el="viewer-root"]')?.focus();
   }
 
   bindEvents() {
@@ -371,6 +401,7 @@ export class IIIFViewer {
         extractLangValue(c.rawLabel, lang) ||
         (c.kind === 'scene' ? `3D Scene ${idx + 1}` : `Canvas ${idx + 1}`);
     });
+    this.inspectionTools?.setLanguage(lang);
 
     const relabelTree = (nodes) =>
       nodes.forEach((n) => {
@@ -441,6 +472,7 @@ export class IIIFViewer {
       this.destroyNavMap();
       this.state.rawManifest = raw;
       this.state.manifest = parsed;
+      this.inspectionTools?.resetManifest();
       this.state.canvasIndex = Math.min(this.options.initialCanvas, parsed.canvases.length - 1);
       this.setError(null);
       this.sidebar.resetSearch();
@@ -554,6 +586,7 @@ export class IIIFViewer {
     this.state.canvasIndex = index;
     this.state.modelStats = null;
     const item = manifest.canvases[index];
+    this.inspectionTools?.setCanvas(manifest, index);
 
     const osdEl = this.wrapper.querySelector('[data-el="osd-container"]');
     const sceneEl = this.wrapper.querySelector('[data-el="scene-container"]');
@@ -739,6 +772,7 @@ export class IIIFViewer {
     this.fullscreen?.destroy();
     this.destroyNavMap();
     this.destroySceneViewer();
+    this.inspectionTools?.destroy();
     this.osdController?.destroy();
     this.container.innerHTML = '';
   }

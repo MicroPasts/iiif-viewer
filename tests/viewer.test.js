@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ osd: null }));
+vi.mock('openseadragon', () => ({ default: {} }));
 vi.mock('../src/osd-controller.js', () => ({
   OsdController: class {
     constructor() {
@@ -47,6 +48,8 @@ describe('IIIF viewer', () => {
   it('renders a manifest, navigates canvases, changes language and cleans up', async () => {
     const onCanvasChange = vi.fn();
     viewer = new IIIFViewer(container, { manifest, showSidebar: true, onCanvasChange });
+    expect(container.querySelector('[data-inspect="ruler"]')).toBeNull();
+    expect(container.querySelector('[data-inspect="curtain"]')).toBeNull();
     expect(container.querySelector('[data-el="manifest-title"]').textContent).toBe('Book');
     expect(mocks.osd.open).toHaveBeenCalledWith(
       { type: 'image', url: 'https://example.test/image/0.jpg' }, []

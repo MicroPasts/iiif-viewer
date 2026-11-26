@@ -2,6 +2,60 @@ import { describe, expect, it } from 'vitest';
 import { extractLangValue, normalizeNavPlace, parseAnnotationItems, parseIIIFManifest } from '../src/parser.js';
 
 describe('IIIF parser', () => {
+  it('extracts full-canvas Choice layers and physical dimensions without treating fragments as layers', () => {
+    const parsed = parseIIIFManifest({
+      type: 'Manifest',
+      items: [{
+        id: 'canvas', type: 'Canvas', width: 100, height: 200,
+        physicalDimensions: {
+          profile: 'http://iiif.io/api/annex/extensions/physdim',
+          physicalScale: 0.02, physicalUnits: 'cm',
+        },
+        items: [{ items: [
+          { motivation: 'painting', target: 'canvas', body: { type: 'Choice', items: [
+            { type: 'Image', id: 'one.jpg', label: { en: ['Visible'] } },
+            { type: 'Image', id: 'two.jpg', label: { en: ['Infrared'] } },
+          ] } },
+          { motivation: 'painting', target: 'canvas#xywh=1,2,3,4', body: { type: 'Image', id: 'partial.jpg' } },
+        ] }],
+      }],
+    });
+    expect(parsed.canvases[0]).toMatchObject({
+      canvasWidth: 100, canvasHeight: 200, imageCoversCanvas: true,
+      millimetersPerPixel: 0.2, image: { staticUrl: 'one.jpg' },
+      layers: [{ staticUrl: 'one.jpg', label: 'Visible' }, { staticUrl: 'two.jpg', label: 'Infrared' }],
+    });
+  });
+
+  it('rejects invalid physical scales and marks region-based base images', () => {
+    const parsed = parseIIIFManifest({
+      type: 'Manifest',
+      items: [{
+        id: 'canvas', type: 'Canvas', width: 100, height: 100,
+        physicalDimensions: { profile: 'http://iiif.io/api/annex/extensions/physdim', physicalScale: -1, physicalUnits: 'mm' },
+        items: [{ items: [{ motivation: 'painting', target: 'canvas#xywh=1,2,3,4', body: { type: 'Image', id: 'one.jpg' } }] }],
+      }],
+    });
+    expect(parsed.canvases[0]).toMatchObject({ millimetersPerPixel: null, imageCoversCanvas: false, layers: [] });
+  });
+
+  it('supports Presentation 2 image Choice layers', () => {
+    const parsed = parseIIIFManifest({
+      '@context': 'http://iiif.io/api/presentation/2/context.json',
+      sequences: [{ canvases: [{
+        '@id': 'canvas', width: 100, height: 100,
+        images: [{ on: 'canvas', resource: {
+          '@type': 'oa:Choice',
+          default: { '@id': 'one.jpg', service: { '@id': 'https://example.test/one', profile: 'level2' } },
+          item: [{ '@id': 'two.jpg', service: { '@id': 'https://example.test/two', profile: 'level2' } }],
+        } }],
+      }] }],
+    });
+    expect(parsed.canvases[0].image.infoJsonUrl).toBe('https://example.test/one/info.json');
+    expect(parsed.canvases[0].layers.map((layer) => layer.infoJsonUrl))
+      .toEqual(['https://example.test/one/info.json', 'https://example.test/two/info.json']);
+  });
+
   it('normalizes a Presentation 2 image service and embedded annotations', () => {
     const parsed = parseIIIFManifest({
       '@context': 'http://iiif.io/api/presentation/2/context.json',

@@ -319,6 +319,8 @@ onBeforeUnmount(() => viewer?.destroy());
 | `theme` | `'dark' \| 'light'` | `'dark'` | Initial scoped theme for the viewer container. |
 | `language` | `string` | `'en'` | Preferred language code for manifest labels and metadata. |
 | `summaryCollapseLength` | `number` | `300` | Plain-text summary length above which a Show more control appears; set to `0` or a negative number to disable collapsing. |
+| `physicalRuler` | `boolean` | `false` | Enable the physical scale and manual calibration controls for 2D images. |
+| `layersCurtain` | `boolean` | `false` | Enable the image-layer curtain and comparison canvas controls for 2D images. |
 | `height` | `string` | `'680px'` | CSS height of the viewer container when not in fullscreen; the viewer has a 540px minimum height. |
 | `showUrlInput` | `boolean` | `true` | Shows or hides the manifest URL input bar in the top toolbar. |
 | `allowManifestDrop` | `boolean` | `true` | Allows manifest URLs or IIIF links to be dropped onto the viewer for loading. |
@@ -333,6 +335,22 @@ onBeforeUnmount(() => viewer?.destroy());
 
 `onSelectScene` receives the container element, normalized scene data (`modelUrl`, `format`, `transforms`, and `thumbnail`), and `{ theme, title }`. The `modelUrl` is already resolved through proxy routing. The returned instance may implement `destroy()`, `setTheme(theme)`, and `handleResize()`; the viewer calls these when available.
 
+### Physical ruler and image curtain
+
+Both tools are opt-in. Their buttons appear in the top toolbar for 2D images, not 3D scenes; the controls open over the image:
+
+```js
+const viewer = new IIIFViewer('#viewer', {
+  manifestUrl: 'https://example.org/manifest.json',
+  physicalRuler: true,
+  layersCurtain: true,
+});
+```
+
+**Ruler:** Open Ruler to show a physical scale bar. The viewer reads the canvas `physicalDimensions` extension with the IIIF physical-dimensions profile, a positive `physicalScale` in units per canvas pixel, and `physicalUnits` of `mm`, `cm`, or `in`. The image and canvas must have proportional dimensions for this automatic calibration. Otherwise, enter millimetres per **source image pixel**, or select **Draw calibration line**, drag across a known distance within the image, enter its length in millimetres, and select **Calibrate from line**. Escape cancels drawing. Manual calibration is kept per canvas until a new manifest is loaded; **Use manifest scale** resets it. Measurements are only as accurate as the metadata or the supplied calibration, and assume uniform scale across the image.
+
+**Curtain:** Open Curtain to compare full-canvas painting images and IIIF `Choice` alternatives. Additional layers start hidden; select **Show** for the layer to compare. The slider reveals each visible layer from the left or top, according to the direction; layers can be hidden or moved up. A second canvas can also be selected as an overlay when both canvases declare identical dimensions. Source images must also have identical pixel dimensions. Only full-canvas images without selectors or transforms are supported; cropped or positioned painting regions are not compared. Image alignment is not automatic: matching dimensions do not guarantee that the subjects are registered. Layer settings reset when changing the comparison canvas or navigating between canvases. Image URLs use the normal image proxy routing and require appropriate CORS permissions.
+
 ---
 
 ## Instance Methods
@@ -343,6 +361,7 @@ onBeforeUnmount(() => viewer?.destroy());
 | `setManifest` | `async setManifest(jsonOrString)` | Parses and renders a manifest JSON object or string directly. |
 | `goToCanvas` | `async goToCanvas(index)` | Navigates to the specified zero-based canvas or 3D scene index. |
 | `setProxyRoutes` | `setProxyRoutes(routes)` | Updates `proxyRoutes` at runtime and reloads the active canvas/scene. |
+| `setInspectionTools` | `setInspectionTools({ physicalRuler, layersCurtain })` | Enables or disables either 2D inspection tool at runtime; omitted options retain their current values. Changing the options resets manual calibration and layer controls. |
 | `resolveUrl` | `resolveUrl(url, resourceType)` | Resolves a URL through configured `proxyRoutes`, `assetProxyUrl`, or `proxyUrl`. |
 | `setTheme` | `setTheme('dark' \| 'light')` | Switches the viewer theme between dark and light mode. |
 | `setLanguage` | `setLanguage(language)` | Updates manifest, canvas, and range labels and metadata for the selected language. |
@@ -390,9 +409,12 @@ npm test
 # Install Chromium once, then run browser tests
 npx playwright install chromium
 npm run test:e2e
+
+# Optionally test the live Fitzwilliam miniature manifest and image service
+IIIF_LIVE_TEST=1 npm run test:e2e -- e2e/miniature-live.e2e.js
 ```
 
-Vitest covers the parser, components, and services. Playwright exercises navigation, annotations, maps, 3D controls, keyboard behavior, and selected contrast checks in Chromium. Browser tests use local fixtures and a mocked map style rather than external IIIF or map services; they do not replace manual accessibility or assistive-technology testing.
+Vitest covers the parser, components, and services. Playwright exercises navigation, annotations, maps, 3D controls, keyboard behavior, and selected contrast checks in Chromium. By default, browser tests use local fixtures and a mocked map style rather than external IIIF or map services; the optional live test requires network access. They do not replace manual accessibility or assistive-technology testing.
 
 ## Contributing, citation, and security
 

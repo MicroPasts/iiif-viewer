@@ -1,4 +1,5 @@
 import OpenSeadragon from 'openseadragon';
+import { preserveSecureTileUrls } from './iiif-tile-source.js';
 
 export class OsdController {
   constructor(element, { onAnnotationClick = null } = {}) {
@@ -46,6 +47,7 @@ export class OsdController {
       this.pendingAnnotations = [];
       const focus = this.pendingFocus;
       this.pendingFocus = null;
+      preserveSecureTileUrls(this.osd.world.getItemAt(0), tileSource);
       this.renderAnnotationOverlays(annotations);
       if (focus && this.imageGeneration === generation) this.focusAnnotation(focus);
     };

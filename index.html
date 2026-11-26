@@ -56,6 +56,13 @@
           >
             Map (v3)
           </button>
+          <button
+            type="button"
+            data-preset="https://miniatures-iiif.fitzmuseum.cam.ac.uk/B-MIN-28/manifest.json"
+            class="px-3 py-1.5 font-semibold rounded-md bg-slate-800 text-white hover:bg-slate-700 transition"
+          >
+            Miniature (v3)
+          </button>
         </div>
       </div>
 
@@ -124,11 +131,20 @@
 
       const defaultManifest =
         'https://iiif.vam.ac.uk/collections/O24955/manifest.json';
+      const miniatureManifest =
+        'https://miniatures-iiif.fitzmuseum.cam.ac.uk/B-MIN-28/manifest.json';
 
       const viewer = new IIIFViewer('#iiif-viewer', {
         manifestUrl: defaultManifest,
         theme: 'dark',
         height: '680px',
+        onManifestLoad: (manifest) => {
+          queueMicrotask(() => {
+            if (viewer.state.manifest !== manifest) return;
+            const enabled = manifest.id === miniatureManifest;
+            viewer.setInspectionTools({ physicalRuler: enabled, layersCurtain: enabled });
+          });
+        },
         // Rewrites local Laravel asset/manifest URLs to Vite's same-origin dev proxy
         proxyRoutes: window.location.hostname === 'localhost'
           ? {

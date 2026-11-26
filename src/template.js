@@ -39,7 +39,7 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
 
         ${urlBar}
 
-        <div class="flex items-center gap-1.5">
+        <div class="flex flex-wrap items-center gap-1.5">
           <!-- Zoom & Image Controls (2D Canvas) -->
           <div data-el="zoom-controls" class="inline-flex rounded-md bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 divide-x divide-slate-200 dark:divide-slate-700">
             <button type="button" data-action="zoom-in" title="Zoom In (+)" aria-label="Zoom in" class="px-2 py-1 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition">+</button>
@@ -48,6 +48,8 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
             <button type="button" data-action="rotate" title="Rotate 90°" aria-label="Rotate image 90 degrees" class="px-2 py-1 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition">&#8635;</button>
             <button type="button" data-action="toggle-filters" title="Image Inspection Filters" aria-expanded="false" aria-controls="${id}-filters" class="px-2 py-1 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 aria-expanded:bg-purple-600 aria-expanded:text-white transition">Filters</button>
           </div>
+
+          <div data-el="inspection-buttons" class="iiif-inspection-buttons" role="group" aria-label="Image inspection tools" hidden></div>
 
           <button type="button" data-action="toggle-sidebar" title="Toggle Info Panel (I)" aria-expanded="false" aria-controls="${id}-sidebar" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 aria-expanded:bg-purple-600 aria-expanded:hover:bg-purple-700 aria-expanded:border-purple-600 aria-expanded:text-white transition">
             Info
@@ -79,6 +81,7 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
         <div class="relative flex-1 min-w-0 bg-slate-100 dark:bg-slate-950 flex flex-col">
           <div data-el="osd-container" class="w-full h-full"></div>
           <div data-el="scene-container" class="hidden w-full h-full overflow-hidden"></div>
+          <div id="${id}-inspection" data-el="inspection-tools" class="iiif-inspection-tools" hidden></div>
 
           <!-- 2D Image Filters Bar -->
           <div id="${id}-filters" data-el="filter-bar" class="hidden absolute top-3 right-3 z-20 p-3 rounded-lg bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-700 shadow-lg backdrop-blur-xs text-xs space-y-2.5 w-60">
