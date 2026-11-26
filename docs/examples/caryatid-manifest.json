@@ -1,0 +1,184 @@
+{
+  "@context": "http://iiif.io/api/presentation/3/context.json",
+  "id": "https://www.britishmuseum.org/collection/object/G_1816-0610-128/manifest.json",
+  "type": "Manifest",
+  "label": {
+    "en": ["Caryatid (1816,0610.128)"]
+  },
+  "summary": {
+    "en": [
+      "Pentelic marble caryatid from the Erechtheion. This is one of six female figures that supported the architrave in the south porch of the Erechtheion. The woman wears a peplos pinned on each shoulder. Her hair is braided and falls in a thick rope down her back. She probably held a sacrificial vessel in one of the missing hands. The weight she bears is taken on the right leg, hidden by perpendicular folds of the garment. The other leg is bent with the drapery clinging to it. The head is surmounted by a capital with a beed and reel and egg and dart moulding. Part of the abacus also survives."
+    ]
+  },
+  "metadata": [
+    {
+      "label": { "en": ["Object Type"] },
+      "value": { "en": ["caryatid"] }
+    },
+    {
+      "label": { "en": ["Museum number"] },
+      "value": { "none": ["1816,0610.128"] }
+    },
+    {
+      "label": { "en": ["Registration number"] },
+      "value": { "none": ["1816,0610.128"] }
+    },
+    {
+      "label": { "en": ["Cultures/periods"] },
+      "value": { "en": ["Classical Greek"] }
+    },
+    {
+      "label": { "en": ["Production date"] },
+      "value": { "en": ["421BC-406BC"] }
+    },
+    {
+      "label": { "en": ["Findspot"] },
+      "value": {
+        "en": [
+          "Excavated/Findspot: Erechtheion (Europe: Greece: Attica (Greece): Athens: Acropolis (Athens): Erechtheion)"
+        ]
+      }
+    },
+    {
+      "label": { "en": ["Materials"] },
+      "value": { "en": ["marble"] }
+    },
+    {
+      "label": { "en": ["Dimensions"] },
+      "value": { "en": ["Height: 2.28 metres (about)"] }
+    },
+    {
+      "label": { "en": ["Curator's comments"] },
+      "value": { "en": ["Ancient Marbles of the British Museum, IX, pl. 6."] }
+    },
+    {
+      "label": { "en": ["Bibliographic references"] },
+      "value": {
+        "en": ["Sculpture / Catalogue of Greek Sculpture in the British Museum (407)"]
+      }
+    },
+    {
+      "label": { "en": ["Location"] },
+      "value": { "en": ["On display (Room 19 - Greece: Athens)"] }
+    },
+    {
+      "label": { "en": ["Acquisition name"] },
+      "value": { "en": ["Purchased from: Thomas Bruce, 7th Earl of Elgin"] }
+    },
+    {
+      "label": { "en": ["Department"] },
+      "value": { "en": ["Greek and Roman"] }
+    }
+  ],
+  "requiredStatement": {
+    "label": { "en": ["Attribution"] },
+    "value": { "en": ["© The Trustees of the British Museum"] }
+  },
+  "rights": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+  "provider": [
+    {
+      "id": "https://www.britishmuseum.org/",
+      "type": "Agent",
+      "label": { "en": ["The British Museum"] },
+      "homepage": [
+        {
+          "id": "https://www.britishmuseum.org/",
+          "type": "Text",
+          "label": { "en": ["The British Museum Website"] },
+          "format": "text/html"
+        }
+      ]
+    }
+  ],
+  "homepage": [
+    {
+      "id": "https://www.britishmuseum.org/collection/object/G_1816-0610-128",
+      "type": "Text",
+      "label": { "en": ["British Museum Collection Online: 1816,0610.128"] },
+      "format": "text/html"
+    }
+  ],
+  "seeAlso": [
+    {
+      "id": "https://www.britishmuseum.org/api/_object?id=G_1816-0610-128",
+      "type": "Dataset",
+      "label": { "en": ["British Museum Collection Object JSON"] },
+      "format": "application/json"
+    }
+  ],
+  "items": [
+    {
+      "id": "https://www.britishmuseum.org/collection/object/G_1816-0610-128/canvas/1",
+      "type": "Canvas",
+      "label": { "en": ["Caryatid (1816,0610.128) — Image 1"] },
+      "width": 4270,
+      "height": 5584,
+      "items": [
+        {
+          "id": "https://www.britishmuseum.org/collection/object/G_1816-0610-128/canvas/1/page",
+          "type": "AnnotationPage",
+          "items": [
+            {
+              "id": "https://www.britishmuseum.org/collection/object/G_1816-0610-128/canvas/1/annotation/1",
+              "type": "Annotation",
+              "motivation": "painting",
+              "target": "https://www.britishmuseum.org/collection/object/G_1816-0610-128/canvas/1",
+              "body": {
+                "id": "https://media.britishmuseum.org/iiif/Repository/Documents/2014_11/12_17/f2edcae6_45cf_4de8_b421_a3e1011e5ea5/00117221_001.ptif/full/max/0/default.jpg",
+                "type": "Image",
+                "format": "image/jpeg",
+                "width": 4270,
+                "height": 5584,
+                "service": [
+                  {
+                    "id": "https://media.britishmuseum.org/iiif/Repository/Documents/2014_11/12_17/f2edcae6_45cf_4de8_b421_a3e1011e5ea5/00117221_001.ptif",
+                    "type": "ImageService3",
+                    "profile": "level2",
+                    "width": 4270,
+                    "height": 5584,
+                    "maxWidth": 1000,
+                    "maxHeight": 1000,
+                    "sizes": [
+                      { "width": 33, "height": 43 },
+                      { "width": 66, "height": 87 },
+                      { "width": 133, "height": 174 },
+                      { "width": 266, "height": 349 },
+                      { "width": 533, "height": 698 },
+                      { "width": 1067, "height": 1396 },
+                      { "width": 2135, "height": 2792 }
+                    ],
+                    "tiles": [
+                      {
+                        "width": 128,
+                        "height": 128,
+                        "scaleFactors": [1, 2, 4, 8, 16, 32, 64, 129]
+                      }
+                    ],
+                    "extraQualities": ["color", "gray", "bitonal"],
+                    "extraFormats": ["tif", "webp", "avif"],
+                    "extraFeatures": [
+                      "regionByPct",
+                      "sizeByPct",
+                      "sizeByConfinedWh",
+                      "sizeUpscaling",
+                      "rotationBy90s",
+                      "mirroring"
+                    ],
+                    "service": [
+                      {
+                        "@context": "http://iiif.io/api/annex/services/physdim/1/context.json",
+                        "profile": "http://iiif.io/api/annex/services/physdim",
+                        "physicalScale": 0.00333333,
+                        "physicalUnits": "in"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

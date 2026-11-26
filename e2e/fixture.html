@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Viewer test</title></head>
+  <body>
+    <div id="viewer"></div>
+    <script type="module">
+      import { IIIFViewer } from '/src/index.js';
+
+      const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
+      const positions = new Float32Array([-1, -1, 0, 1, -1, 0, 0, 1, 0]);
+      const buffer = btoa(String.fromCharCode(...new Uint8Array(positions.buffer)));
+      const model = {
+        asset: { version: '2.0' },
+        scene: 0,
+        scenes: [{ nodes: [0] }],
+        nodes: [{ mesh: 0 }],
+        meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+        accessors: [{ bufferView: 0, componentType: 5126, count: 3, type: 'VEC3', min: [-1, -1, 0], max: [1, 1, 0] }],
+        bufferViews: [{ buffer: 0, byteLength: positions.byteLength }],
+        buffers: [{ uri: `data:application/octet-stream;base64,${buffer}`, byteLength: positions.byteLength }],
+      };
+      const modelUrl = `data:application/json;base64,${btoa(JSON.stringify(model))}`;
+      window.viewer = new IIIFViewer('#viewer', {
+        showSidebar: true,
+        manifest: {
+          type: 'Manifest',
+          id: 'https://example.test/manifest',
+          label: { en: ['Book'], fr: ['Livre'] },
+          navPlace: {
+            type: 'FeatureCollection',
+            features: [{
+              type: 'Feature', properties: { label: 'London' },
+              geometry: { type: 'Point', coordinates: [-0.12, 51.5] },
+            }],
+          },
+          items: [
+            ...[0, 1].map((index) => ({
+              id: `https://example.test/canvas/${index}`,
+              type: 'Canvas',
+              label: { en: [`Page ${index + 1}`], fr: [`Feuille ${index + 1}`] },
+              items: [{ items: [{ motivation: 'painting', body: { id: image, type: 'Image' } }] }],
+              annotations: index === 0 ? [{ items: [{
+                id: 'note', body: { value: 'Ancient pottery' }, target: 'https://example.test/canvas/0#xywh=0,0,1,1',
+              }] }] : [],
+            })),
+            {
+              id: 'https://example.test/scene', type: 'Scene', label: { en: ['Model'] },
+              items: [{ items: [{ motivation: 'painting', body: { id: modelUrl, type: 'Model', format: 'model/gltf+json' } }] }],
+            },
+          ],
+        },
+      });
+    </script>
+  </body>
+</html>

@@ -17,7 +17,7 @@
           <button
             type="button"
             data-preset="https://iiif.vam.ac.uk/collections/O24955/manifest.json"
-            class="px-3 py-1.5 font-semibold rounded-md bg-purple-600 text-white hover:bg-purple-500 transition"
+            class="px-3 py-1.5 font-semibold rounded-md bg-purple-600 text-white hover:bg-purple-700 transition"
           >
             V&amp;A Sculpture (v2)
           </button>
@@ -42,10 +42,69 @@
           >
             Multi-Page Book (v3)
           </button>
+          <button
+            type="button"
+            data-preset="https://manifests.museologi.st/9f6fe27e-f60a-46a1-95bb-e0a618b3be3a.json"
+            class="px-3 py-1.5 font-semibold rounded-md bg-slate-800 text-white hover:bg-slate-700 transition"
+          >
+            Simple annotation (v3)
+          </button>
+          <button
+            type="button"
+            data-preset="https://iiif.io/api/cookbook/recipe/0318-navPlace-navDate/manifest-1.json"
+            class="px-3 py-1.5 font-semibold rounded-md bg-slate-800 text-white hover:bg-slate-700 transition"
+          >
+            Map (v3)
+          </button>
         </div>
       </div>
 
       <div id="iiif-viewer"></div>
+
+      <section id="configuration-examples" aria-labelledby="examples-heading" class="space-y-4 pt-6">
+        <div>
+          <h2 id="examples-heading" class="text-xl font-bold">Configuration examples</h2>
+          <p class="text-sm text-slate-600">Open an example to load a separate viewer using a local copy of the British Museum's Caryatid manifest. Images are served by the British Museum.</p>
+        </div>
+
+        <details class="rounded-lg border border-slate-300 bg-white p-4">
+          <summary class="cursor-pointer font-semibold">Hide the URL bar</summary>
+          <div class="space-y-3 pt-3">
+            <p class="text-sm">The URL input and Load button are hidden, but dropping a manifest link still works.</p>
+            <pre class="overflow-auto rounded bg-slate-900 p-3 text-xs text-white"><code>new IIIFViewer('#example-no-url', {
+  manifestUrl: './examples/caryatid-manifest.json',
+  showUrlInput: false,
+});</code></pre>
+            <div id="example-no-url"></div>
+          </div>
+        </details>
+
+        <details class="rounded-lg border border-slate-300 bg-white p-4">
+          <summary class="cursor-pointer font-semibold">Disable manifest drops</summary>
+          <div class="space-y-3 pt-3">
+            <p class="text-sm">The URL bar remains available, but dropping a manifest link does not load it.</p>
+            <pre class="overflow-auto rounded bg-slate-900 p-3 text-xs text-white"><code>new IIIFViewer('#example-no-drop', {
+  manifestUrl: './examples/caryatid-manifest.json',
+  allowManifestDrop: false,
+});</code></pre>
+            <div id="example-no-drop"></div>
+          </div>
+        </details>
+
+        <details class="rounded-lg border border-slate-300 bg-white p-4">
+          <summary class="cursor-pointer font-semibold">Start with fewer controls</summary>
+          <div class="space-y-3 pt-3">
+            <p class="text-sm">The URL bar and manifest drops are disabled, and the sidebar starts closed. The Info button can still open it.</p>
+            <pre class="overflow-auto rounded bg-slate-900 p-3 text-xs text-white"><code>new IIIFViewer('#example-minimal', {
+  manifestUrl: './examples/caryatid-manifest.json',
+  showUrlInput: false,
+  allowManifestDrop: false,
+  showSidebar: false,
+});</code></pre>
+            <div id="example-minimal"></div>
+          </div>
+        </details>
+      </section>
     </div>
 
     <script type="module">
@@ -71,15 +130,37 @@
       presetButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
           presetButtons.forEach((b) => {
-            b.classList.remove('bg-purple-600', 'hover:bg-purple-500');
+            b.classList.remove('bg-purple-600', 'hover:bg-purple-700');
             b.classList.add('bg-slate-800', 'hover:bg-slate-700');
           });
           btn.classList.remove('bg-slate-800', 'hover:bg-slate-700');
-          btn.classList.add('bg-purple-600', 'hover:bg-purple-500');
+          btn.classList.add('bg-purple-600', 'hover:bg-purple-700');
 
           viewer.loadManifest(btn.dataset.preset);
         });
       });
+
+      const exampleManifest = './examples/caryatid-manifest.json';
+      const exampleOptions = {
+        'example-no-url': { showUrlInput: false },
+        'example-no-drop': { allowManifestDrop: false },
+        'example-minimal': {
+          showUrlInput: false,
+          allowManifestDrop: false,
+          showSidebar: false,
+        },
+      };
+
+      for (const [id, options] of Object.entries(exampleOptions)) {
+        const container = document.getElementById(id);
+        const details = container.closest('details');
+        let exampleViewer;
+        details.addEventListener('toggle', () => {
+          if (details.open && !exampleViewer) {
+            exampleViewer = new IIIFViewer(container, { manifestUrl: exampleManifest, ...options });
+          }
+        });
+      }
     </script>
   </body>
 </html>

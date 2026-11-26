@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { escapeHtml } from './template.js';
+import { escapeHtml } from './sanitize.js';
 
 export class BuiltInSceneViewer {
   constructor(container, sceneData, options = {}) {
@@ -13,6 +13,7 @@ export class BuiltInSceneViewer {
     this.resolvedModelUrl = options.resolvedModelUrl || sceneData.modelUrl;
     this.dracoDecoderPath =
       options.dracoDecoderPath || 'https://www.gstatic.com/draco/versioned/decoders/1.5.7/';
+    this.onModelLoaded = options.onModelLoaded || null;
 
     this.state = {
       autoRotate: false,
@@ -26,6 +27,8 @@ export class BuiltInSceneViewer {
     this.objectUrls = [];
     this.loadGeneration = 0;
     this.destroyed = false;
+    this.modelStats = null;
+    this.defaultCameraDistance = 2.35;
     this.defaultCameraPos = new THREE.Vector3(0, 0.25, 2.35);
 
     this.mount();
@@ -35,50 +38,79 @@ export class BuiltInSceneViewer {
     this.container.innerHTML = `
       <div class="relative w-full h-full flex flex-col select-none">
         <div data-el="three-canvas-host" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+        <div data-el="three-error-announcement" role="alert" class="sr-only"></div>
 
         <!-- 3D Loading Indicator -->
-        <div data-el="three-loading" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-xs text-xs font-medium text-slate-700 dark:text-slate-300 gap-2">
+        <div data-el="three-loading" role="status" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-xs text-xs font-medium text-slate-700 dark:text-slate-300 gap-2">
           <span>Loading 3D Model (.glb)...</span>
-          <span data-el="three-progress" class="font-mono text-[11px] text-purple-600 dark:text-purple-400">0%</span>
+          <span data-el="three-progress" aria-hidden="true" class="font-mono text-[11px] text-purple-600 dark:text-purple-400">0%</span>
         </div>
 
         <!-- 3D Error Overlay with Local File Fallback -->
         <div data-el="three-error" class="hidden absolute top-14 left-4 right-4 z-20 p-4 rounded-lg bg-red-50 dark:bg-red-950/95 border border-red-300 dark:border-red-800 text-xs text-red-800 dark:text-red-200 space-y-2.5">
           <p data-el="three-error-msg" class="break-all"></p>
           <div class="flex flex-wrap items-center gap-2">
-            <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white font-medium cursor-pointer transition">
-              <span>Select Local .GLB File</span>
-              <input type="file" data-el="three-file-input" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" class="hidden" />
-            </label>
+            <button type="button" data-three-action="open-error-file" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white font-medium cursor-pointer transition">Select Local .GLB File</button>
+            <input type="file" data-el="three-file-input" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" class="hidden" />
           </div>
         </div>
 
         <!-- Interactive 3D Controls Bar -->
         <div class="absolute top-3 left-1/2 -translate-x-1/2 z-10 inline-flex flex-wrap items-center gap-1 p-1 rounded-lg bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 shadow-md backdrop-blur-xs text-[11px] font-medium">
-          <button type="button" data-three-action="reset" title="Reset Camera" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-            Reset View
+          <button type="button" data-three-action="reset" title="Reset Camera" class="px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            Reset
           </button>
-          <button type="button" data-three-action="autorotate" title="Toggle Auto-Rotate" aria-pressed="false" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-            Auto-Rotate
+          <div class="inline-flex rounded border border-slate-200 dark:border-slate-700 divide-x divide-slate-200 dark:divide-slate-700">
+            <button type="button" data-three-view="front" title="Front View" class="px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Front</button>
+            <button type="button" data-three-view="top" title="Top View" class="px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Top</button>
+            <button type="button" data-three-view="side" title="Side View" class="px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Side</button>
+          </div>
+          <button type="button" data-three-action="autorotate" title="Toggle Auto-Rotate" aria-pressed="false" class="px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            Rotate
           </button>
-          <button type="button" data-three-action="wireframe" title="Toggle Wireframe" aria-pressed="false" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <button type="button" data-three-action="wireframe" title="Toggle Wireframe" aria-pressed="false" class="px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
             Wireframe
           </button>
-          <button type="button" data-three-action="lighting" title="Toggle Raking / Warm Light" aria-pressed="false" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <button type="button" data-three-action="lighting" title="Toggle Raking / Warm Light" aria-pressed="false" class="px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
             Raking Light
           </button>
-          <label title="Open Local .GLB File" class="px-2.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition">
-            Open .GLB
-            <input type="file" data-el="three-toolbar-file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" class="hidden" />
-          </label>
-          <a href="${escapeHtml(this.resolvedModelUrl)}" download title="Download GLB" class="px-2.5 py-1 rounded text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 transition">
+          <details class="relative">
+            <summary class="px-2 py-1 rounded cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800">Move view</summary>
+            <div class="absolute top-full left-0 mt-1 p-2 w-52 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-lg space-y-2">
+              <div role="group" aria-label="Rotate 3D view" class="flex items-center gap-1">
+                <span>Rotate</span>
+                <button type="button" data-three-action="rotate-left" aria-label="Rotate 3D view left" class="px-1 border rounded">&larr;</button>
+                <button type="button" data-three-action="rotate-up" aria-label="Rotate 3D view up" class="px-1 border rounded">&uarr;</button>
+                <button type="button" data-three-action="rotate-down" aria-label="Rotate 3D view down" class="px-1 border rounded">&darr;</button>
+                <button type="button" data-three-action="rotate-right" aria-label="Rotate 3D view right" class="px-1 border rounded">&rarr;</button>
+              </div>
+              <div role="group" aria-label="Pan 3D view" class="flex items-center gap-1">
+                <span>Pan</span>
+                <button type="button" data-three-action="pan-left" aria-label="Pan 3D view left" class="px-1 border rounded">&larr;</button>
+                <button type="button" data-three-action="pan-up" aria-label="Pan 3D view up" class="px-1 border rounded">&uarr;</button>
+                <button type="button" data-three-action="pan-down" aria-label="Pan 3D view down" class="px-1 border rounded">&darr;</button>
+                <button type="button" data-three-action="pan-right" aria-label="Pan 3D view right" class="px-1 border rounded">&rarr;</button>
+              </div>
+              <div role="group" aria-label="Zoom 3D view" class="flex items-center gap-1">
+                <span>Zoom</span>
+                <button type="button" data-three-action="zoom-in" aria-label="Zoom 3D view in" class="px-2 border rounded">+</button>
+                <button type="button" data-three-action="zoom-out" aria-label="Zoom 3D view out" class="px-2 border rounded">&minus;</button>
+              </div>
+            </div>
+          </details>
+          <button type="button" data-three-action="open-toolbar-file" title="Open Local .GLB File" class="px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition">Open .GLB</button>
+          <input type="file" data-el="three-toolbar-file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" class="hidden" />
+          <a href="${escapeHtml(this.resolvedModelUrl)}" download title="Download GLB" class="px-2 py-1 rounded text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 transition">
             &darr; GLB
           </a>
         </div>
 
-        <!-- Controls Hint -->
-        <div class="hidden sm:block absolute bottom-3 right-3 z-10 px-2.5 py-1 rounded bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400 pointer-events-none">
-          Left-drag: Rotate &bull; Right-drag: Pan &bull; Scroll: Zoom
+        <!-- Model Stats & Controls Hint -->
+        <div class="hidden sm:flex items-center justify-between gap-3 absolute bottom-3 left-3 right-3 z-10 pointer-events-none text-[10px] text-slate-500 dark:text-slate-400">
+          <span data-el="three-stats" class="hidden px-2.5 py-1 rounded bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 font-mono"></span>
+          <span class="ml-auto px-2.5 py-1 rounded bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800">
+            Left-drag: Rotate &bull; Right-drag: Pan &bull; Scroll: Zoom
+          </span>
         </div>
       </div>
     `;
@@ -105,6 +137,9 @@ export class BuiltInSceneViewer {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.1;
+    this.renderer.domElement.tabIndex = 0;
+    this.renderer.domElement.setAttribute('role', 'group');
+    this.renderer.domElement.setAttribute('aria-label', `3D model: ${this.title}. Use arrow keys to pan, Shift and arrow keys to rotate, and plus or minus to zoom.`);
     host.appendChild(this.renderer.domElement);
 
     this.ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
@@ -127,6 +162,17 @@ export class BuiltInSceneViewer {
     this.controls.dampingFactor = 0.07;
     this.controls.minDistance = 0.2;
     this.controls.maxDistance = 25;
+    this.controls.listenToKeyEvents(this.renderer.domElement);
+    this.renderer.domElement.addEventListener('keydown', (event) => {
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.key === '+' || event.key === '=') {
+        event.preventDefault();
+        this.controls.dollyIn(0.8);
+      } else if (event.key === '-') {
+        event.preventDefault();
+        this.controls.dollyOut(0.8);
+      }
+    });
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize());
     this.resizeObserver.observe(host);
@@ -144,6 +190,7 @@ export class BuiltInSceneViewer {
     this.scene.remove(this.wrapperGroup);
     this.disposeObject(this.wrapperGroup);
     this.wrapperGroup = null;
+    this.modelStats = null;
   }
 
   disposeObject(object) {
@@ -165,7 +212,29 @@ export class BuiltInSceneViewer {
     });
   }
 
+  computeModelStats(root) {
+    let meshes = 0;
+    let triangles = 0;
+    let hasDraco = false;
+
+    root.traverse((obj) => {
+      if (!obj.isMesh || !obj.geometry) return;
+      meshes += 1;
+      const geo = obj.geometry;
+      if (geo.index) {
+        triangles += Math.round(geo.index.count / 3);
+      } else if (geo.attributes?.position) {
+        triangles += Math.round(geo.attributes.position.count / 3);
+      }
+    });
+
+    if (this.dracoLoader) hasDraco = true;
+    return { meshes, triangles, hasDraco };
+  }
+
   loadModel(url) {
+    const announcement = this.container.querySelector('[data-el="three-error-announcement"]');
+    if (announcement) announcement.textContent = '';
     if (!url) {
       this.showLoadError('No 3D model URL was provided.');
       return;
@@ -186,7 +255,6 @@ export class BuiltInSceneViewer {
     const loadingEl = this.container.querySelector('[data-el="three-loading"]');
     const progressEl = this.container.querySelector('[data-el="three-progress"]');
     const errorEl = this.container.querySelector('[data-el="three-error"]');
-    const errorMsgEl = this.container.querySelector('[data-el="three-error-msg"]');
 
     loadingEl?.classList.remove('hidden');
     errorEl?.classList.add('hidden');
@@ -231,19 +299,18 @@ export class BuiltInSceneViewer {
         this.wrapperGroup.add(root);
         this.wrapperGroup.scale.setScalar(scale);
 
-        if (this.state.wireframe) {
-          this.wrapperGroup.traverse((obj) => {
-            if (obj.isMesh && obj.material) {
-              const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
-              materials.forEach((material) => {
-                material.wireframe = true;
-              });
-            }
-          });
-        }
+        this.applyWireframeState();
 
         this.scene.add(this.wrapperGroup);
         this.fitCameraToObject();
+
+        this.modelStats = this.computeModelStats(this.wrapperGroup);
+        const statsEl = this.container.querySelector('[data-el="three-stats"]');
+        if (statsEl && this.modelStats.meshes > 0) {
+          statsEl.textContent = `${this.modelStats.meshes} mesh${this.modelStats.meshes === 1 ? '' : 'es'} • ${this.modelStats.triangles.toLocaleString()} tris`;
+          statsEl.classList.remove('hidden');
+        }
+        this.onModelLoaded?.(this.modelStats);
       },
       (xhr) => {
         if (generation !== this.loadGeneration) return;
@@ -276,13 +343,65 @@ export class BuiltInSceneViewer {
         ? url
         : `Could not fetch 3D model from ${url}.${protocolHint}`;
     errorEl.classList.remove('hidden');
+    const announcement = this.container.querySelector('[data-el="three-error-announcement"]');
+    if (announcement) announcement.textContent = 'Could not load the 3D model. See the error message for details.';
   }
 
   fitCameraToObject() {
-    this.defaultCameraPos.set(0, 0.25, 2.35);
+    if (this.wrapperGroup) {
+      const box = new THREE.Box3().setFromObject(this.wrapperGroup);
+      const sphere = box.getBoundingSphere(new THREE.Sphere());
+      const fovRad = THREE.MathUtils.degToRad(this.camera.fov);
+      const dist = sphere.radius > 0 ? (sphere.radius / Math.sin(fovRad / 2)) * 1.15 : 2.35;
+      this.defaultCameraDistance = Math.max(1.2, Math.min(dist, 6));
+    } else {
+      this.defaultCameraDistance = 2.35;
+    }
+
+    this.defaultCameraPos.set(0, this.defaultCameraDistance * 0.11, this.defaultCameraDistance);
     this.camera.position.copy(this.defaultCameraPos);
     this.controls.target.set(0, 0, 0);
     this.controls.update();
+  }
+
+  setCameraPreset(preset) {
+    const d = this.defaultCameraDistance;
+    this.controls.target.set(0, 0, 0);
+    if (preset === 'front') {
+      this.camera.position.set(0, 0, d);
+    } else if (preset === 'top') {
+      this.camera.position.set(0, d, 0.001);
+    } else if (preset === 'side') {
+      this.camera.position.set(d, 0, 0);
+    }
+    this.controls.update();
+  }
+
+  applyWireframeState() {
+    if (!this.wrapperGroup) return;
+    this.wrapperGroup.traverse((obj) => {
+      if (obj.isMesh && obj.material) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach((m) => {
+          m.wireframe = this.state.wireframe;
+        });
+      }
+    });
+  }
+
+  syncControlButtons() {
+    const map = {
+      autorotate: this.state.autoRotate,
+      wireframe: this.state.wireframe,
+      lighting: this.state.warmLight,
+    };
+    Object.entries(map).forEach(([action, active]) => {
+      const btn = this.container.querySelector(`[data-three-action="${action}"]`);
+      if (!btn) return;
+      btn.classList.toggle('bg-purple-600', active);
+      btn.classList.toggle('text-white', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
   }
 
   bindControls() {
@@ -301,32 +420,50 @@ export class BuiltInSceneViewer {
     });
 
     this.container.addEventListener('click', (e) => {
+      const viewBtn = e.target.closest('[data-three-view]');
+      if (viewBtn) {
+        this.setCameraPreset(viewBtn.dataset.threeView);
+        return;
+      }
+
       const btn = e.target.closest('[data-three-action]');
       if (!btn) return;
 
       const action = btn.dataset.threeAction;
-      if (action === 'reset') {
+      if (action === 'open-toolbar-file' || action === 'open-error-file') {
+        const input = action === 'open-toolbar-file' ? 'three-toolbar-file' : 'three-file-input';
+        this.container.querySelector(`[data-el="${input}"]`)?.click();
+      } else if (action === 'reset') {
         this.fitCameraToObject();
+      } else if (action === 'rotate-left') {
+        this.controls.rotateLeft(0.2);
+      } else if (action === 'rotate-right') {
+        this.controls.rotateLeft(-0.2);
+      } else if (action === 'rotate-up') {
+        this.controls.rotateUp(0.2);
+      } else if (action === 'rotate-down') {
+        this.controls.rotateUp(-0.2);
+      } else if (action === 'pan-left') {
+        this.controls.pan(40, 0);
+      } else if (action === 'pan-right') {
+        this.controls.pan(-40, 0);
+      } else if (action === 'pan-up') {
+        this.controls.pan(0, 40);
+      } else if (action === 'pan-down') {
+        this.controls.pan(0, -40);
+      } else if (action === 'zoom-in') {
+        this.controls.dollyIn(0.8);
+      } else if (action === 'zoom-out') {
+        this.controls.dollyOut(0.8);
       } else if (action === 'autorotate') {
         this.state.autoRotate = !this.state.autoRotate;
         this.controls.autoRotate = this.state.autoRotate;
         this.controls.autoRotateSpeed = 2.0;
-        btn.classList.toggle('bg-purple-600', this.state.autoRotate);
-        btn.classList.toggle('text-white', this.state.autoRotate);
-        btn.setAttribute('aria-pressed', String(this.state.autoRotate));
+        this.syncControlButtons();
       } else if (action === 'wireframe') {
         this.state.wireframe = !this.state.wireframe;
-        this.scene.traverse((obj) => {
-          if (obj.isMesh && obj.material) {
-            const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-            mats.forEach((m) => {
-              m.wireframe = this.state.wireframe;
-            });
-          }
-        });
-        btn.classList.toggle('bg-purple-600', this.state.wireframe);
-        btn.classList.toggle('text-white', this.state.wireframe);
-        btn.setAttribute('aria-pressed', String(this.state.wireframe));
+        this.applyWireframeState();
+        this.syncControlButtons();
       } else if (action === 'lighting') {
         this.state.warmLight = !this.state.warmLight;
         if (this.state.warmLight) {
@@ -340,9 +477,7 @@ export class BuiltInSceneViewer {
           this.keyLight.intensity = 1.4;
           this.keyLight.position.set(2.5, 3.5, 3);
         }
-        btn.classList.toggle('bg-purple-600', this.state.warmLight);
-        btn.classList.toggle('text-white', this.state.warmLight);
-        btn.setAttribute('aria-pressed', String(this.state.warmLight));
+        this.syncControlButtons();
       }
     });
   }

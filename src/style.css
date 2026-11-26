@@ -1,6 +1,33 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+[data-el="viewer-root"]:focus-visible,
+[data-el="viewer-root"] :focus-visible,
+[data-el="viewer-root"] label:focus-within {
+  outline: 2px solid #7e22ce;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 4px #fff;
+}
+.dark [data-el="viewer-root"]:focus-visible,
+.dark [data-el="viewer-root"] :focus-visible,
+.dark [data-el="viewer-root"] label:focus-within {
+  outline-color: #c084fc;
+  box-shadow: inset 0 0 0 4px #020617;
+}
+@media (forced-colors: active) {
+  [data-el="viewer-root"]:focus-visible,
+  [data-el="viewer-root"] :focus-visible,
+  [data-el="viewer-root"] label:focus-within {
+    outline-color: Highlight;
+    box-shadow: none;
+  }
+}
+[data-el="viewer-root"] button,
+[data-el="viewer-root"] summary {
+  min-width: 24px;
+  min-height: 24px;
+}
+
 .iiif-scroll::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -11,4 +38,18 @@
 .iiif-scroll::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.35);
   border-radius: 9999px;
+}
+
+.iiif-anno-overlay {
+  border: 2px solid rgba(168, 85, 247, 0.85);
+  background: rgba(168, 85, 247, 0.14);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+.iiif-anno-overlay:hover,
+.iiif-anno-overlay.is-active {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.22);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
 }
