@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "IIIF Viewer"
+authors:
+  - family-names: Pett
+    given-names: Daniel
+    orcid: "https://orcid.org/0000-0002-0246-2335"
+version: "1.0.2"
+license: MPL-2.0
+repository-code: "https://github.com/MicroPasts/iiif-viewer"
+url: "https://github.com/MicroPasts/iiif-viewer"
+keywords:
+  - IIIF
+  - digital heritage
+  - image viewer
+  - 3D viewer
