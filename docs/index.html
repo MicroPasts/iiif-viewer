@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>IIIF Viewer — Presentation 2.0, 3.0 &amp; 4.0 Sandbox</title>
-    <script type="module" crossorigin src="./assets/index-CFuJV3ow.js"></script>
+    <script type="module" crossorigin src="./assets/index-C1XoAnTh.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/openseadragon-1AIgNfqS.js">
-    <link rel="stylesheet" crossorigin href="./assets/index-ChlP82MH.css">
+    <link rel="stylesheet" crossorigin href="./assets/index-CT6TpJWM.css">
   </head>
   <body class="bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100 p-6 sm:p-8 font-sans">
     <div class="max-w-6xl mx-auto space-y-4">
@@ -140,6 +140,22 @@
   externalViewers: false,
 });</code></pre>
             <div id="example-no-external-viewers"></div>
+          </div>
+        </details>
+
+        <details class="rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900 p-4">
+          <summary class="cursor-pointer font-semibold">Measure an image</summary>
+          <div class="space-y-3 pt-3">
+            <p class="text-sm">Open Measure, choose point-to-point, polyline or area, then select Start and click points on the image. Select Finish for a polyline or area; Escape cancels a drawing. Results are in image pixels unless a physical scale is available. Open Ruler to calibrate a known distance, but note that a photograph of a three-dimensional object does not generally have a uniform physical scale.</p>
+            <pre class="overflow-auto rounded bg-slate-900 p-3 text-xs text-white"><code>new IIIFViewer('#example-measurement', {
+  manifestUrl: './examples/caryatid-manifest.json',
+  showUrlInput: false,
+  allowManifestDrop: false,
+  showSidebar: false,
+  physicalRuler: true,
+  measurement: true,
+});</code></pre>
+            <div id="example-measurement"></div>
           </div>
         </details>
 

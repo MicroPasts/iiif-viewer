@@ -2,6 +2,7 @@ import OpenSeadragon from 'openseadragon';
 import { escapeHtml } from './sanitize.js';
 import { extractLangValue } from './parser.js';
 import { preserveSecureTileUrls } from './iiif-tile-source.js';
+import { MeasurementTools } from './measurement-tools.js';
 
 function sourceFor(image, resolveUrl) {
   if (image?.infoJsonUrl) return resolveUrl(image.infoJsonUrl, 'image');
@@ -10,11 +11,12 @@ function sourceFor(image, resolveUrl) {
 }
 
 export class InspectionTools {
-  constructor(wrapper, osd, { ruler, curtain, resolveUrl }) {
+  constructor(wrapper, osd, { ruler, curtain, measurement, resolveUrl }) {
     this.wrapper = wrapper;
     this.osd = osd;
     this.rulerEnabled = ruler;
     this.curtainEnabled = curtain;
+    this.measurementEnabled = measurement;
     this.resolveUrl = resolveUrl;
     this.generation = 0;
     this.layers = [];
@@ -27,7 +29,8 @@ export class InspectionTools {
     const panelId = this.host.id;
     this.toolbar.innerHTML = `
       ${ruler ? `<button type="button" data-inspect="ruler" aria-expanded="false" aria-controls="${panelId}-ruler"><span aria-hidden="true">&#x2301;</span> Ruler</button>` : ''}
-      ${curtain ? `<button type="button" data-inspect="curtain" aria-expanded="false" aria-controls="${panelId}-curtain"><span aria-hidden="true">&#x25e7;</span> Curtain</button>` : ''}`;
+      ${curtain ? `<button type="button" data-inspect="curtain" aria-expanded="false" aria-controls="${panelId}-curtain"><span aria-hidden="true">&#x25e7;</span> Curtain</button>` : ''}
+      ${measurement ? `<button type="button" data-inspect="measurement" aria-expanded="false" aria-controls="${panelId}-measurement">Measure</button>` : ''}`;
     this.host.innerHTML = `
       <section id="${panelId}-ruler" data-inspect-panel="ruler" class="iiif-inspection-panel" aria-label="Physical ruler" hidden>
         <div class="iiif-inspection-heading"><span class="iiif-inspection-icon" aria-hidden="true">&#x2301;</span><div><strong>Physical ruler</strong><p>Measure at the current zoom level</p></div></div>
@@ -52,7 +55,15 @@ export class InspectionTools {
         </div>
         <div class="iiif-inspection-section"><strong class="iiif-inspection-label">Layers</strong><p class="iiif-inspection-help">Show a layer and drag its slider to reveal it.</p><div data-inspect="layers"></div><p data-inspect="layer-status" class="iiif-inspection-help" role="status"></p></div>
       </section>
+      <section id="${panelId}-measurement" data-inspect-panel="measurement" class="iiif-inspection-panel" aria-label="Image measurement" hidden>
+        <div class="iiif-inspection-heading"><div><strong>Image measurement</strong><p>Measure distances and areas on the image</p></div></div>
+        <label class="iiif-inspection-field">Type <select data-inspect="measurement-type"><option value="line">Point to point</option><option value="polyline">Polyline</option><option value="area">Area</option></select></label>
+        <div class="iiif-inspection-actions"><button type="button" data-inspect="measurement-start" class="iiif-inspection-primary">Start</button><button type="button" data-inspect="measurement-finish">Finish</button><button type="button" data-inspect="measurement-clear">Clear all</button></div>
+        <p data-inspect="measurement-status" class="iiif-inspection-status" role="status"></p>
+        <div data-inspect="measurement-list"></div>
+      </section>
       <div data-inspect="ruler-display" class="iiif-physical-ruler" hidden aria-label="Physical scale"></div>
+      <svg data-inspect="measurement-drawing" class="iiif-measurement-drawing" aria-hidden="true"></svg>
       <svg data-inspect="drawing" class="iiif-calibration-drawing" hidden aria-label="Draw calibration line">
         <line stroke="#f59e0b" stroke-width="3"></line>
       </svg>`;
@@ -63,7 +74,8 @@ export class InspectionTools {
     this.host.addEventListener('input', this.onInput);
     this.host.addEventListener('change', this.onInput);
     this.onOpen = () => this.imageOpened();
-    this.onAnimation = () => this.updateRuler();
+    this.measurement = measurement ? new MeasurementTools(this.host, osd, this) : null;
+    this.onAnimation = () => { this.updateRuler(); this.measurement?.renderDrawing(); };
     this.onOpenFailed = () => {
       if (this.curtainEnabled) this.host.querySelector('[data-inspect="layer-status"]').textContent = 'Could not load the current image.';
       if (this.rulerEnabled) this.setScaleStatus('Could not load the current image.');
@@ -87,6 +99,7 @@ export class InspectionTools {
   }
 
   setCanvas(manifest, index) {
+    const restoreFocus = this.host.contains(document.activeElement) || this.toolbar.contains(document.activeElement);
     this.generation += 1;
     this.cancelDrawing();
     this.removeLayers();
@@ -95,16 +108,16 @@ export class InspectionTools {
     this.canvas = manifest?.canvases[index];
     this.base = null;
     this.linePixels = null;
-    const restoreFocus = this.host.contains(document.activeElement) || this.toolbar.contains(document.activeElement);
     this.host.hidden = !this.canvas || this.canvas.kind !== 'canvas' ||
       !sourceFor(this.canvas.image, this.resolveUrl);
     this.toolbar.hidden = this.host.hidden;
+    this.millimetersPerPixel = this.calibrations.get(this.canvas) ?? null;
+    this.measurement?.setCanvas(this.canvas);
     if (this.host.hidden && restoreFocus) {
       this.wrapper.querySelector('[data-el="viewer-root"]')?.focus();
     }
     this.host.querySelector('[data-inspect="ruler-display"]').hidden = true;
     if (this.host.hidden) return;
-    this.millimetersPerPixel = this.calibrations.get(this.canvas) ?? null;
     this.syncScaleStatus();
     if (this.curtainEnabled) {
       const current = this.canvas;
@@ -128,6 +141,7 @@ export class InspectionTools {
     this.useManifestScale();
     this.syncScaleStatus();
     this.updateRuler();
+    this.measurement?.render();
     if (this.curtainEnabled) this.loadLayers();
   }
 
@@ -227,12 +241,14 @@ export class InspectionTools {
     const button = event.target.closest('button');
     if (!button) return;
     const action = button.dataset.inspect;
-    if (action === 'ruler' || action === 'curtain') {
+    if (action === 'ruler' || action === 'curtain' || action === 'measurement') {
       const panel = this.host.querySelector(`[data-inspect-panel="${action}"]`);
-      const other = action === 'ruler' ? 'curtain' : 'ruler';
-      this.host.querySelector(`[data-inspect-panel="${other}"]`).hidden = true;
-      this.toolbar.querySelector(`[data-inspect="${other}"]`)?.setAttribute('aria-expanded', 'false');
-      if (other === 'ruler') this.cancelDrawing();
+      for (const other of ['ruler', 'curtain', 'measurement'].filter((name) => name !== action)) {
+        this.host.querySelector(`[data-inspect-panel="${other}"]`).hidden = true;
+        this.toolbar.querySelector(`[data-inspect="${other}"]`)?.setAttribute('aria-expanded', 'false');
+      }
+      if (action !== 'ruler') this.cancelDrawing();
+      if (action !== 'measurement' || !panel.hidden) this.measurement?.cancel();
       panel.hidden = !panel.hidden;
       button.setAttribute('aria-expanded', String(!panel.hidden));
       if (action === 'ruler') {
@@ -240,6 +256,14 @@ export class InspectionTools {
         if (!this.visible) this.cancelDrawing();
         this.updateRuler();
       }
+    } else if (action === 'measurement-start') {
+      this.measurement?.start();
+    } else if (action === 'measurement-finish') {
+      this.measurement?.finish();
+    } else if (action === 'measurement-clear') {
+      this.measurement?.clear();
+    } else if (button.dataset.measurementRemove !== undefined) {
+      this.measurement?.remove(Number(button.dataset.measurementRemove));
     } else if (action === 'draw') {
       if (!this.base) return this.setScaleStatus('Wait for the image to load.');
       this.linePixels = null;
@@ -261,6 +285,7 @@ export class InspectionTools {
       this.useManifestScale();
       this.syncScaleStatus();
       this.updateRuler();
+      this.measurement?.render();
     } else if (button.dataset.layerVisibility !== undefined) {
       const layer = this.layers[Number(button.dataset.layerVisibility)];
       layer.visible = !layer.visible;
@@ -297,6 +322,7 @@ export class InspectionTools {
     this.calibrations.set(this.canvas, value);
     this.syncScaleStatus();
     this.updateRuler();
+    this.measurement?.render();
   }
 
   setScaleStatus(message) {
@@ -387,6 +413,7 @@ export class InspectionTools {
 
   resetManifest() {
     this.calibrations.clear();
+    this.measurement?.resetManifest();
   }
 
   getVisibleLayers() {
@@ -402,6 +429,7 @@ export class InspectionTools {
     for (const panel of this.host.querySelectorAll('[data-inspect-panel]')) panel.hidden = true;
     for (const button of this.toolbar.querySelectorAll('[data-inspect]')) button.setAttribute('aria-expanded', 'false');
     this.cancelDrawing();
+    this.measurement?.cancel();
   }
 
   setLanguage(language) {
@@ -422,6 +450,7 @@ export class InspectionTools {
   destroy() {
     this.generation += 1;
     this.cancelDrawing();
+    this.measurement?.destroy();
     this.removeLayers();
     this.osd.removeHandler('open', this.onOpen);
     this.osd.removeHandler('open-failed', this.onOpenFailed);
