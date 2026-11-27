@@ -23,6 +23,7 @@
       window.viewer = new IIIFViewer('#viewer', {
         showSidebar: true,
         resizableSidebar: new URLSearchParams(location.search).has('resizableSidebar'),
+        sideBySide: new URLSearchParams(location.search).has('sideBySide'),
         manifest: {
           type: 'Manifest',
           id: 'https://example.test/manifest',

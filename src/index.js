@@ -18,6 +18,7 @@ import { JsonInspector } from './json-inspector.js';
 import { configurePermalink, parsePermalink, serializePermalink } from './permalink.js';
 import { SidebarResizer } from './sidebar-resizer.js';
 import { configureSidebarTabs } from './sidebar-tabs.js';
+import { SideBySide } from './side-by-side.js';
 
 function extractDroppedManifestUrl(dataTransfer) {
   if (!dataTransfer) return null;
@@ -78,6 +79,7 @@ export class IIIFViewer {
       summaryCollapseLength: options.summaryCollapseLength ?? 300,
       physicalRuler: options.physicalRuler ?? false,
       layersCurtain: options.layersCurtain ?? false,
+      sideBySide: options.sideBySide ?? false,
       measurement: options.measurement ?? false,
       inspector: options.inspector ?? false,
       persistCanvasTransform: options.persistCanvasTransform ?? false,
@@ -91,6 +93,7 @@ export class IIIFViewer {
       onManifestLoad: options.onManifestLoad || null,
       onCanvasChange: options.onCanvasChange || null,
       onSelectLocation: options.onSelectLocation || null,
+      onCompareChange: options.onCompareChange || null,
     };
 
     this.state = {
@@ -146,6 +149,7 @@ export class IIIFViewer {
     if (this.state.manifest) {
       this.filmstrip.render(this.state.manifest.canvases, (u, t) => this.resolveUrl(u, t));
       this.goToCanvas(this.state.canvasIndex);
+      if (this.comparison) this.comparison.selectCanvas(this.comparison.index);
     }
   }
 
@@ -161,6 +165,7 @@ export class IIIFViewer {
       permalink: Boolean(this.options.permalink),
       resizableSidebar: this.options.resizableSidebar,
       sidebarTabs: this.options.sidebarTabs,
+      sideBySide: this.options.sideBySide,
     });
 
     this.container.innerHTML = '';
@@ -172,6 +177,7 @@ export class IIIFViewer {
       {
         onTransformChange: () => this.syncTransformUI(),
         onAnnotationClick: () => {
+          this.comparison?.setActivePane('primary');
           if (!this.sidebar.availableTabs.includes('annotations')) return;
           this.sidebar.setOpen(true);
           this.sidebar.setTab('annotations');
@@ -205,24 +211,28 @@ export class IIIFViewer {
         }
         this.renderSidebar();
       },
-      onSelectCanvas: (idx) => this.goToCanvas(idx),
+      onSelectCanvas: (idx) => this.goToActiveCanvas(idx),
       onFocusAnnotation: (annoIdx) => {
-        const current = this.state.manifest?.canvases[this.state.canvasIndex];
+        const { manifest, index, controller } = this.getActivePane();
+        const current = manifest?.canvases[index];
         const anno = current?.annotations?.[annoIdx];
-        if (anno) this.osdController.focusAnnotation(anno);
+        if (anno) controller.focusAnnotation(anno);
       },
-      onToggleAnnotations: (visible) => this.osdController.setAnnotationsVisible(visible),
+      onToggleAnnotations: (visible) => this.getActivePane().controller.setAnnotationsVisible(visible),
       onChangeLanguage: (lang) => this.setLanguage(lang),
       onCopyText: (text, btn) => this.copyToClipboard(text, btn),
-      onSearch: (q) => this.searchController.search(q, this.state.manifest),
-      onSelectSearchHit: (hit) => this.goToCanvas(hit.canvasIndex, { focusRegion: hit.xywh }),
+      onSearch: (q) => {
+        const { manifest, search } = this.getActivePane();
+        return search.search(q, manifest);
+      },
+      onSelectSearchHit: (hit) => this.goToActiveCanvas(hit.canvasIndex, { focusRegion: hit.xywh }),
       onMountMap: (hostEl, featureCollection) => this.mountNavMap(hostEl, featureCollection),
       onPanMap: (x, y) => this.activeNavMap?.panBy(x, y),
       onFocusMapFeature: (feat) => {
         this.activeNavMap?.focusFeature?.(feat);
         const cIdx = feat?.properties?._canvasIndex;
-        if (typeof cIdx === 'number' && !Number.isNaN(cIdx) && cIdx !== this.state.canvasIndex) {
-          this.goToCanvas(cIdx);
+        if (typeof cIdx === 'number' && !Number.isNaN(cIdx) && cIdx !== this.getActivePane().index) {
+          this.goToActiveCanvas(cIdx);
         }
         this.options.onSelectLocation?.(feat, { canvasIndex: cIdx });
       },
@@ -254,6 +264,54 @@ export class IIIFViewer {
     });
   }
 
+  getActivePane() {
+    if (this.comparison?.activePane === 'secondary') {
+      return { manifest: this.comparison.manifest, index: this.comparison.index,
+        controller: this.comparison.osd, search: this.comparison.search, sourceUrl: this.comparison.sourceUrl };
+    }
+    return { manifest: this.state.manifest, index: this.state.canvasIndex,
+      controller: this.osdController, search: this.searchController, sourceUrl: this.state.currentUrl };
+  }
+
+  goToActiveCanvas(index, options) {
+    if (this.comparison?.activePane === 'secondary') return this.comparison.selectCanvas(index, options);
+    return this.goToCanvas(index, options);
+  }
+
+  enterSideBySide() {
+    if (!this.options.sideBySide) throw new Error('Enable sideBySide to use comparison.');
+    if (!this.state.manifest) throw new Error('Load a manifest before opening comparison.');
+    if (this.comparison) return;
+    this.comparison = new SideBySide(this);
+    this.wrapper.querySelector('[data-action="toggle-compare"]')?.setAttribute('aria-expanded', 'true');
+    this.comparison.usePrimary();
+    this.handleViewportResize();
+    this.renderSidebar();
+  }
+
+  exitSideBySide() {
+    if (!this.comparison) return;
+    const comparison = this.comparison;
+    const restoreFocus = comparison.host.contains(document.activeElement);
+    this.comparison = null;
+    comparison.destroy();
+    this.wrapper.querySelector('[data-action="toggle-compare"]')?.setAttribute('aria-expanded', 'false');
+    this.sidebar.resetSearch();
+    this.destroyNavMap();
+    this.syncFilterUI();
+    this.syncTransformUI();
+    this.syncActiveControls();
+    this.renderSidebar();
+    this.handleViewportResize();
+    if (restoreFocus) this.wrapper.querySelector('[data-action="toggle-compare"]')?.focus();
+    this.options.onCompareChange?.({ open: false, activePane: 'primary', secondaryManifest: null, secondaryManifestUrl: null, secondaryCanvasIndex: null, secondaryCanvas: null });
+  }
+
+  toggleSideBySide() {
+    if (this.comparison) this.exitSideBySide();
+    else this.enterSideBySide();
+  }
+
   setInspectionTools({ physicalRuler = this.options.physicalRuler, layersCurtain = this.options.layersCurtain, measurement = this.options.measurement } = {}) {
     if (physicalRuler === this.options.physicalRuler && layersCurtain === this.options.layersCurtain && measurement === this.options.measurement) return;
     const hadFocus = this.wrapper.querySelector('[data-el="inspection-tools"]')?.contains(document.activeElement) ||
@@ -277,23 +335,27 @@ export class IIIFViewer {
       if (!actionEl) return;
 
       const action = actionEl.dataset.action;
+      const controller = this.getActivePane().controller;
+      if (action === 'toggle-compare') {
+        try { this.toggleSideBySide(); } catch (error) { this.setError(error.message); }
+      }
       if (action === 'copy-permalink') this.copyPermalink();
       if (action === 'toggle-json-inspector') this.jsonInspector?.toggle();
       if (action === 'toggle-theme') this.toggleTheme();
       if (action === 'toggle-sidebar') this.toggleSidebar();
       if (action === 'toggle-fullscreen') this.toggleFullscreen();
-      if (action === 'zoom-in') this.osdController.zoomBy(1.4);
-      if (action === 'zoom-out') this.osdController.zoomBy(0.7);
-      if (action === 'zoom-home') this.osdController.goHome();
-      if (action === 'rotate') this.osdController.rotateBy(90);
+      if (action === 'zoom-in') controller.zoomBy(1.4);
+      if (action === 'zoom-out') controller.zoomBy(0.7);
+      if (action === 'zoom-home') controller.goHome();
+      if (action === 'rotate') controller.rotateBy(90);
       if (action === 'flip-horizontal' || action === 'flip-vertical') {
-        this.osdController.toggleFlip(action === 'flip-horizontal' ? 'horizontal' : 'vertical');
+        controller.toggleFlip(action === 'flip-horizontal' ? 'horizontal' : 'vertical');
         this.syncTransformUI();
       }
-      if (action === 'pan-left') this.osdController.panBy(-1, 0);
-      if (action === 'pan-right') this.osdController.panBy(1, 0);
-      if (action === 'pan-up') this.osdController.panBy(0, -1);
-      if (action === 'pan-down') this.osdController.panBy(0, 1);
+      if (action === 'pan-left') controller.panBy(-1, 0);
+      if (action === 'pan-right') controller.panBy(1, 0);
+      if (action === 'pan-up') controller.panBy(0, -1);
+      if (action === 'pan-down') controller.panBy(0, 1);
       if (action === 'prev-canvas') this.goToCanvas(this.state.canvasIndex - 1);
       if (action === 'next-canvas') this.goToCanvas(this.state.canvasIndex + 1);
       if (action === 'toggle-filters') {
@@ -302,7 +364,7 @@ export class IIIFViewer {
         actionEl.setAttribute('aria-expanded', String(open));
       }
       if (action === 'reset-filters') {
-        this.osdController.resetFilters();
+        controller.resetFilters();
         this.syncFilterUI();
       }
     });
@@ -312,7 +374,7 @@ export class IIIFViewer {
       if (!slider) return;
       const key = slider.dataset.filter;
       const val = Number(slider.value);
-      this.osdController.setFilter({ [key]: val });
+      this.getActivePane().controller.setFilter({ [key]: val });
       slider.setAttribute('aria-valuetext', `${val}%`);
       const label = this.wrapper.querySelector(`[data-el="${key}-val"]`);
       if (label) label.textContent = `${val}%`;
@@ -322,8 +384,9 @@ export class IIIFViewer {
       const toggleBtn = e.target.closest('[data-filter-toggle]');
       if (!toggleBtn) return;
       const key = toggleBtn.dataset.filterToggle;
-      const next = !this.osdController.filters[key];
-      this.osdController.setFilter({ [key]: next });
+      const controller = this.getActivePane().controller;
+      const next = !controller.filters[key];
+      controller.setFilter({ [key]: next });
       toggleBtn.setAttribute('aria-pressed', String(next));
     });
 
@@ -377,7 +440,7 @@ export class IIIFViewer {
   }
 
   syncFilterUI() {
-    const { brightness, contrast, grayscale, invert } = this.osdController.filters;
+    const { brightness, contrast, grayscale, invert } = this.getActivePane().controller.filters;
     const bSlider = this.wrapper.querySelector('[data-filter="brightness"]');
     const cSlider = this.wrapper.querySelector('[data-filter="contrast"]');
     if (bSlider) {
@@ -403,7 +466,19 @@ export class IIIFViewer {
   syncTransformUI() {
     for (const [axis, key] of [['horizontal', 'flipHorizontal'], ['vertical', 'flipVertical']]) {
       this.wrapper.querySelector(`[data-action="flip-${axis}"]`)
-        ?.setAttribute('aria-pressed', String(this.osdController.transform[key]));
+        ?.setAttribute('aria-pressed', String(this.getActivePane().controller.transform[key]));
+    }
+  }
+
+  syncActiveControls() {
+    const { manifest, index } = this.getActivePane();
+    const isScene = manifest?.canvases[index]?.kind === 'scene';
+    const controls = this.wrapper.querySelector('[data-el="zoom-controls"]');
+    controls?.classList.toggle('hidden', Boolean(isScene));
+    controls?.classList.toggle('inline-flex', !isScene);
+    if (isScene) {
+      this.wrapper.querySelector('[data-el="filter-bar"]')?.classList.add('hidden');
+      this.wrapper.querySelector('[data-action="toggle-filters"]')?.setAttribute('aria-expanded', 'false');
     }
   }
 
@@ -411,6 +486,8 @@ export class IIIFViewer {
     this.osdController.resize();
     this.activeModelViewer?.handleResize?.();
     this.activeNavMap?.resize?.();
+    this.comparison?.osd.resize();
+    this.comparison?.model?.handleResize?.();
   }
 
   setTheme(theme) {
@@ -418,6 +495,7 @@ export class IIIFViewer {
     this.wrapper.classList.toggle('dark', this.state.theme === 'dark');
     this.wrapper.querySelector('[data-action="toggle-theme"]')?.setAttribute('aria-pressed', String(this.state.theme === 'dark'));
     this.activeModelViewer?.setTheme?.(this.state.theme);
+    this.comparison?.model?.setTheme?.(this.state.theme);
   }
 
   toggleTheme() {
@@ -475,6 +553,7 @@ export class IIIFViewer {
 
     this.filmstrip.render(manifest.canvases, (u, t) => this.resolveUrl(u, t));
     this.filmstrip.setActive(this.state.canvasIndex);
+    this.comparison?.relabel(lang);
     this.renderSidebar();
   }
 
@@ -505,6 +584,7 @@ export class IIIFViewer {
   }
 
   async loadManifest(url, { permalinkState = null } = {}) {
+    this.exitSideBySide();
     this.state.currentUrl = url;
     const input = this.wrapper.querySelector('[data-el="url-input"]');
     if (input) input.value = url;
@@ -547,8 +627,9 @@ export class IIIFViewer {
     }
   }
 
-  async setManifest(jsonOrString, { sourceUrl = null, permalinkState = null } = {}) {
+  async setManifest(jsonOrString, { sourceUrl = null, permalinkState = null, compareSwap = false, canvasIndex = null } = {}) {
     try {
+      if (!compareSwap) this.exitSideBySide();
       if (sourceUrl === null) this.fetchAbortController?.abort();
       const raw = typeof jsonOrString === 'string' ? JSON.parse(jsonOrString) : jsonOrString;
       const language = permalinkState?.language || this.state.language;
@@ -579,7 +660,7 @@ export class IIIFViewer {
       this.state.manifest = parsed;
       this.jsonInspector?.setManifest(raw, parsed);
       this.inspectionTools?.resetManifest();
-      this.state.canvasIndex = permalinkState ? permalinkState.canvas : Math.min(this.options.initialCanvas, parsed.canvases.length - 1);
+      this.state.canvasIndex = permalinkState ? permalinkState.canvas : Math.min(canvasIndex ?? this.options.initialCanvas, parsed.canvases.length - 1);
       this.setError(null);
       this.sidebar.resetSearch();
       this.searchController.setManifest(raw);
@@ -671,12 +752,12 @@ export class IIIFViewer {
   async mountNavMap(hostEl, featureCollection) {
     this.destroyNavMap();
     const { NavPlaceMap } = await import('./navplace-map.js');
-    if (this.sidebar.activeTab !== 'map') return;
+    if (this.sidebar.activeTab !== 'map' || !hostEl.isConnected) return;
 
     this.activeNavMap = new NavPlaceMap(hostEl, {
       featureCollection,
       mapStyle: this.options.mapStyle,
-      onSelectCanvas: (idx) => this.goToCanvas(idx),
+      onSelectCanvas: (idx) => this.goToActiveCanvas(idx),
       onSelectFeature: (feat, meta) => this.options.onSelectLocation?.(feat, meta),
     });
   }
@@ -760,6 +841,8 @@ export class IIIFViewer {
     if (status) status.textContent = `Canvas ${index + 1} of ${manifest.canvases.length}: ${item.label}`;
 
     this.filmstrip.setActive(index);
+    this.comparison?.updateSync();
+    this.syncActiveControls();
     this.renderSidebar();
     this.options.onCanvasChange?.(item, index);
 
@@ -799,6 +882,10 @@ export class IIIFViewer {
           }
           this.renderSidebar();
         }
+        if (this.comparison?.manifest?.canvases[this.comparison.index] === item && item.kind !== 'scene') {
+          this.comparison.osd.renderAnnotationOverlays(item.annotations.filter((a) => Array.isArray(a.xywh) && a.xywh.length === 4));
+          this.renderSidebar();
+        }
       }
     } catch {
       // Non-fatal if external annotation endpoint is unreachable
@@ -808,6 +895,7 @@ export class IIIFViewer {
   async mountSceneViewer(container, item) {
     this.destroySceneViewer();
     if (!container) return;
+    const generation = this.sceneGeneration;
 
     const resolvedModelUrl = this.resolveUrl(item.scene.modelUrl, 'model');
 
@@ -824,7 +912,7 @@ export class IIIFViewer {
     }
 
     const { BuiltInSceneViewer } = await import('./scene-viewer.js');
-    if (this.state.canvasIndex !== item.index) return;
+    if (this.sceneGeneration !== generation || this.state.manifest?.canvases[this.state.canvasIndex] !== item) return;
 
     this.activeModelViewer = new BuiltInSceneViewer(container, item.scene, {
       theme: this.state.theme,
@@ -839,6 +927,7 @@ export class IIIFViewer {
   }
 
   destroySceneViewer() {
+    this.sceneGeneration = (this.sceneGeneration || 0) + 1;
     this.activeModelViewer?.destroy?.();
     this.activeModelViewer = null;
     const sceneEl = this.wrapper.querySelector('[data-el="scene-container"]');
@@ -846,13 +935,16 @@ export class IIIFViewer {
   }
 
   renderSidebar() {
-    const manifest = this.state.manifest;
+    const { manifest, index, search, sourceUrl } = this.getActivePane();
+    const context = this.wrapper.querySelector('[data-el="compare-context"]');
+    context.hidden = !this.comparison;
+    if (this.comparison) context.textContent = `Info: ${this.comparison.activePane === 'primary' ? 'Primary' : 'Secondary'} pane`;
     if (!manifest) return;
-    const currentCanvas = manifest.canvases[this.state.canvasIndex];
+    const currentCanvas = manifest.canvases[index];
     this.sidebar.render(manifest, currentCanvas, {
-      manifestUrl: this.state.currentUrl,
-      modelStats: this.state.modelStats,
-      hasRemoteSearch: this.searchController.hasRemoteSearch(),
+      manifestUrl: sourceUrl || '',
+      modelStats: this.comparison?.activePane === 'secondary' ? this.comparison.modelStats : this.state.modelStats,
+      hasRemoteSearch: search.hasRemoteSearch(),
       navFeatures: this.collectNavFeatures(manifest, currentCanvas),
     });
   }
@@ -887,6 +979,7 @@ export class IIIFViewer {
   }
 
   destroy() {
+    this.exitSideBySide();
     this.fetchAbortController?.abort();
     this.searchController?.destroy();
     this.fullscreen?.destroy();

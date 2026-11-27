@@ -3,7 +3,7 @@ import { SIDEBAR_TABS } from './sidebar-tabs.js';
 
 let nextViewerId = 0;
 
-export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl, height, inspector = false, permalink = false, resizableSidebar = false, sidebarTabs = SIDEBAR_TABS.map(({ id }) => id) }) {
+export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl, height, inspector = false, permalink = false, resizableSidebar = false, sidebarTabs = SIDEBAR_TABS.map(({ id }) => id), sideBySide = false }) {
   const id = `iiif-viewer-${++nextViewerId}`;
   const urlBar = showUrlInput
     ? `
@@ -52,6 +52,7 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
 
           <div data-el="inspection-buttons" class="iiif-inspection-buttons" role="group" aria-label="Image inspection tools" hidden></div>
           <div data-el="download-button" class="iiif-inspection-buttons" hidden></div>
+          ${sideBySide ? `<button type="button" data-action="toggle-compare" aria-expanded="false" aria-controls="${id}-compare" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 aria-expanded:bg-purple-600 aria-expanded:text-white">Compare</button>` : ''}
 
           ${inspector ? `<button type="button" data-action="toggle-json-inspector" aria-expanded="false" aria-controls="${id}-json-inspector" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 aria-expanded:bg-purple-600 aria-expanded:text-white transition">Inspector</button>` : ''}
           ${permalink ? `<button type="button" data-action="copy-permalink" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">Copy link to current view</button>` : ''}
@@ -84,7 +85,8 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
       <div data-el="workspace" class="relative flex-1 min-h-0 flex overflow-hidden">
         ${permalink ? `<div data-el="permalink-status" role="status" class="iiif-permalink-status"></div>` : ''}
         <!-- Deep Zoom 2D & 3D Viewport -->
-        <div class="relative flex-1 min-w-0 bg-slate-100 dark:bg-slate-950 flex flex-col">
+        <div data-el="comparison-stage" class="iiif-comparison-stage flex-1 min-w-0 min-h-0">
+        <div data-el="primary-pane" class="relative min-w-0 min-h-0 bg-slate-100 dark:bg-slate-950 flex flex-col">
           <div data-el="osd-container" class="w-full h-full"></div>
           <div data-el="scene-container" class="hidden w-full h-full overflow-hidden"></div>
           <div id="${id}-inspection" data-el="inspection-tools" class="iiif-inspection-tools" hidden></div>
@@ -152,9 +154,12 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
             <button type="button" data-action="next-canvas" title="Next Canvas (Right Arrow)" class="font-semibold hover:text-purple-600 dark:hover:text-purple-400 px-1">Next &rarr;</button>
           </div>
         </div>
+        <section id="${id}-compare" data-el="secondary-pane" class="iiif-secondary-pane" aria-label="Secondary comparison pane" hidden></section>
+        </div>
 
         <!-- Right Metadata / Index / Notes / Search / Map Sidebar -->
         <aside id="${id}-sidebar" data-el="sidebar" aria-label="Viewer information" class="absolute inset-y-0 right-0 z-30 w-80 max-w-[85vw] md:static md:z-auto md:max-w-none shrink-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/95 shadow-2xl md:shadow-none flex flex-col overflow-hidden ${resizableSidebar ? 'iiif-resizable-sidebar' : ''}">
+          <div data-el="compare-context" class="iiif-compare-context" role="status" hidden></div>
           ${resizableSidebar ? `<div data-el="sidebar-resizer" class="iiif-sidebar-resizer" role="separator" aria-label="Information panel width" aria-orientation="vertical" aria-controls="${id}-sidebar" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="0" title="Drag to resize the information panel"></div>` : ''}
           <div class="shrink-0 flex items-center border-b border-slate-200 dark:border-slate-800 text-xs font-medium">
             <div role="tablist" aria-label="Information sections" class="iiif-sidebar-tabs flex flex-1">

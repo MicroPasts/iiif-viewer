@@ -54,6 +54,18 @@ afterEach(() => {
 });
 
 describe('IIIF viewer', () => {
+  it('keeps comparison opt-in and rejects opening it when disabled', () => {
+    viewer = new IIIFViewer(container, { manifest });
+    expect(container.querySelector('[data-action="toggle-compare"]')).toBeNull();
+    expect(() => viewer.enterSideBySide()).toThrow('Enable sideBySide');
+  });
+
+  it('requires a loaded manifest before opening comparison', () => {
+    viewer = new IIIFViewer(container, { sideBySide: true });
+    expect(container.querySelector('[data-action="toggle-compare"]')).not.toBeNull();
+    expect(() => viewer.enterSideBySide()).toThrow('Load a manifest');
+  });
+
   it.each(['metadata', 'structures', 'annotations', 'search', 'map'])('allows %s as the only tab', (tab) => {
     viewer = new IIIFViewer(container, { manifest, sidebarTabs: [tab] });
     const tabs = container.querySelectorAll('[role="tab"]');
