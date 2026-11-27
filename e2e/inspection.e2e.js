@@ -20,6 +20,7 @@ test.beforeEach(async ({ page }) => {
       showSidebar: false,
       physicalRuler: true,
       layersCurtain: true,
+      measurement: true,
       manifest: {
         type: 'Manifest', label: { en: ['Inspection'] },
         items: [
@@ -42,8 +43,95 @@ test.beforeEach(async ({ page }) => {
         ],
       },
     });
+
   });
   await expect.poll(() => page.evaluate(() => window.viewer.osdController.osd.world.getItemCount())).toBe(2);
+});
+
+test('measures image geometry, follows the viewport and retains results per canvas', async ({ page }) => {
+  await page.locator('[data-inspect="measurement"]').click();
+  const clickImage = async (x, y) => {
+    const point = await page.evaluate(({ x, y }) => {
+      const osd = window.viewer.osdController.osd;
+      const point = osd.world.getItemAt(0).getContentSize().times(0);
+      point.x = x;
+      point.y = y;
+      const screen = osd.world.getItemAt(0).imageToViewerElementCoordinates(point);
+      const bounds = osd.element.getBoundingClientRect();
+      return { x: bounds.left + screen.x, y: bounds.top + screen.y };
+    }, { x, y });
+    await page.mouse.click(point.x, point.y);
+  };
+  await page.locator('[data-inspect="measurement-start"]').click();
+  await clickImage(60, 40);
+  await clickImage(90, 40);
+  await expect(page.locator('[data-inspect="measurement-list"]')).toContainText('Line 1: 3 mm');
+  await page.locator('[data-inspect="measurement-type"]').selectOption('polyline');
+  await page.locator('[data-inspect="measurement-start"]').click();
+  await clickImage(60, 40);
+  await clickImage(90, 40);
+  await clickImage(90, 80);
+  await page.locator('[data-inspect="measurement-finish"]').click();
+  await expect(page.locator('[data-inspect="measurement-list"]')).toContainText('Polyline 2: 7 mm');
+  await page.locator('[data-inspect="measurement-type"]').selectOption('area');
+  await page.locator('[data-inspect="measurement-start"]').click();
+  await clickImage(60, 40);
+  await clickImage(90, 40);
+  await clickImage(90, 80);
+  await page.locator('[data-inspect="measurement-finish"]').click();
+  await expect(page.locator('[data-inspect="measurement-list"]')).toContainText('Area 3: 6 mm²');
+  const path = page.locator('[data-inspect="measurement-drawing"] polygon');
+  const before = await path.getAttribute('points');
+  await page.locator('[data-action="rotate"]').click();
+  await expect.poll(() => path.getAttribute('points')).not.toBe(before);
+  await page.locator('[data-inspect="ruler"]').click();
+  await page.locator('[data-inspect="scale"]').fill('0.2');
+  await page.locator('[data-inspect="apply-scale"]').click();
+  await page.locator('[data-inspect="measurement"]').click();
+  await expect(page.locator('[data-inspect="measurement-list"]')).toContainText('Area 3: 24 mm²');
+  await page.locator('[data-action="next-canvas"]').click();
+  await expect(page.locator('[data-inspect="measurement-list"]')).toBeEmpty();
+  await page.locator('[data-action="prev-canvas"]').click();
+  await expect(page.locator('[data-inspect="measurement-list"]')).toContainText('Area 3: 24 mm²');
+  await page.locator('[data-measurement-remove="1"]').click();
+  await expect(page.locator('[data-inspect="measurement-list"]')).not.toContainText('Polyline');
+  await page.locator('[data-inspect="measurement-clear"]').click();
+  await expect(page.locator('[data-inspect="measurement-list"]')).toBeEmpty();
+});
+
+test('enables measurement independently for a Presentation 2 canvas without calibration', async ({ page }) => {
+  await page.evaluate(async () => {
+    const image = window.viewer.state.rawManifest.items[0].items[0].items[0].body.items[0].id;
+    window.viewer.setInspectionTools({ physicalRuler: false, layersCurtain: false, measurement: true });
+    await window.viewer.setManifest({
+      '@context': 'http://iiif.io/api/presentation/2/context.json',
+      '@id': 'https://example.test/manifest', '@type': 'sc:Manifest', label: 'V2',
+      sequences: [{ '@type': 'sc:Sequence', canvases: [{
+        '@id': 'https://example.test/canvas', '@type': 'sc:Canvas', label: 'Page', width: 100, height: 100,
+        images: [{ '@type': 'oa:Annotation', motivation: 'sc:painting', on: 'https://example.test/canvas',
+          resource: { '@id': image, '@type': 'dctypes:Image', format: 'image/png' } }],
+      }] }],
+    });
+  });
+  await expect.poll(() => page.evaluate(() => window.viewer.inspectionTools.base !== null)).toBe(true);
+  await expect(page.locator('[data-inspect="ruler"]')).toHaveCount(0);
+  await page.locator('[data-inspect="measurement"]').click();
+  await page.locator('[data-inspect="measurement-start"]').click();
+  for (const x of [60, 90]) {
+    const point = await page.evaluate((x) => {
+      const osd = window.viewer.osdController.osd;
+      const point = osd.world.getItemAt(0).getContentSize().times(0);
+      point.x = x;
+      point.y = 50;
+      const screen = osd.world.getItemAt(0).imageToViewerElementCoordinates(point);
+      const bounds = osd.element.getBoundingClientRect();
+      return { x: bounds.left + screen.x, y: bounds.top + screen.y };
+    }, x);
+    await page.mouse.click(point.x, point.y);
+  }
+  await expect(page.locator('[data-inspect="measurement-list"]')).toContainText('Line 1: 30 px');
+  await page.evaluate(() => window.viewer.setInspectionTools({ measurement: false }));
+  await expect(page.locator('[data-inspect="measurement"]')).toHaveCount(0);
 });
 
 test('compares same-canvas layers and matching canvases, clips and resets on navigation', async ({ page }) => {

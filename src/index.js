@@ -72,6 +72,7 @@ export class IIIFViewer {
       summaryCollapseLength: options.summaryCollapseLength ?? 300,
       physicalRuler: options.physicalRuler ?? false,
       layersCurtain: options.layersCurtain ?? false,
+      measurement: options.measurement ?? false,
       imageDownload: configureImageDownload(options.imageDownload),
       externalViewers: configureExternalViewers(options.externalViewers),
       height: options.height || '680px',
@@ -215,22 +216,24 @@ export class IIIFViewer {
   }
 
   createInspectionTools() {
-    if (!this.options.physicalRuler && !this.options.layersCurtain) return;
+    if (!this.options.physicalRuler && !this.options.layersCurtain && !this.options.measurement) return;
     this.inspectionTools = new InspectionTools(this.wrapper, this.osdController.osd, {
       ruler: this.options.physicalRuler,
       curtain: this.options.layersCurtain,
+      measurement: this.options.measurement,
       resolveUrl: (url, type) => this.resolveUrl(url, type),
     });
   }
 
-  setInspectionTools({ physicalRuler = this.options.physicalRuler, layersCurtain = this.options.layersCurtain } = {}) {
-    if (physicalRuler === this.options.physicalRuler && layersCurtain === this.options.layersCurtain) return;
+  setInspectionTools({ physicalRuler = this.options.physicalRuler, layersCurtain = this.options.layersCurtain, measurement = this.options.measurement } = {}) {
+    if (physicalRuler === this.options.physicalRuler && layersCurtain === this.options.layersCurtain && measurement === this.options.measurement) return;
     const hadFocus = this.wrapper.querySelector('[data-el="inspection-tools"]')?.contains(document.activeElement) ||
       this.wrapper.querySelector('[data-el="inspection-buttons"]')?.contains(document.activeElement);
     this.inspectionTools?.destroy();
     this.inspectionTools = null;
     this.options.physicalRuler = physicalRuler;
     this.options.layersCurtain = layersCurtain;
+    this.options.measurement = measurement;
     this.createInspectionTools();
     if (this.inspectionTools && this.state.manifest) {
       this.inspectionTools.setCanvas(this.state.manifest, this.state.canvasIndex);

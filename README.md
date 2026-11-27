@@ -321,6 +321,7 @@ onBeforeUnmount(() => viewer?.destroy());
 | `summaryCollapseLength` | `number` | `300` | Plain-text summary length above which a Show more control appears; set to `0` or a negative number to disable collapsing. |
 | `physicalRuler` | `boolean` | `false` | Enable the physical scale and manual calibration controls for 2D images. |
 | `layersCurtain` | `boolean` | `false` | Enable the image-layer curtain and comparison canvas controls for 2D images. |
+| `measurement` | `boolean` | `false` | Enable point-to-point, polyline and area measurement for 2D images. |
 | `imageDownload` | `boolean \| object` | `false` | Enable full-canvas image downloads; optionally configure sizes, limits and full-resolution access. |
 | `height` | `string` | `'680px'` | CSS height of the viewer container when not in fullscreen; the viewer has a 540px minimum height. |
 | `showUrlInput` | `boolean` | `true` | Shows or hides the manifest URL input bar in the top toolbar. |
@@ -336,19 +337,22 @@ onBeforeUnmount(() => viewer?.destroy());
 
 `onSelectScene` receives the container element, normalized scene data (`modelUrl`, `format`, `transforms`, and `thumbnail`), and `{ theme, title }`. The `modelUrl` is already resolved through proxy routing. The returned instance may implement `destroy()`, `setTheme(theme)`, and `handleResize()`; the viewer calls these when available.
 
-### Physical ruler and image curtain
+### Physical ruler, measurement and image curtain
 
-Both tools are opt-in. Their buttons appear in the top toolbar for 2D images, not 3D scenes; the controls open over the image:
+These tools are opt-in. Their buttons appear in the top toolbar for 2D images, not 3D scenes; the controls open over the image:
 
 ```js
 const viewer = new IIIFViewer('#viewer', {
   manifestUrl: 'https://example.org/manifest.json',
   physicalRuler: true,
+  measurement: true,
   layersCurtain: true,
 });
 ```
 
 **Ruler:** Open Ruler to show a physical scale bar. The viewer reads the canvas `physicalDimensions` extension with the IIIF physical-dimensions profile, a positive `physicalScale` in units per canvas pixel, and `physicalUnits` of `mm`, `cm`, or `in`. The image and canvas must have proportional dimensions for this automatic calibration. Otherwise, enter millimetres per **source image pixel**, or select **Draw calibration line**, drag across a known distance within the image, enter its length in millimetres, and select **Calibrate from line**. Escape cancels drawing. Manual calibration is kept per canvas until a new manifest is loaded; **Use manifest scale** resets it. Measurements are only as accurate as the metadata or the supplied calibration, and assume uniform scale across the image.
+
+**Measurement:** Open Measure, choose a type and select **Start**. Select two image points for a point-to-point distance; for a polyline or polygon area, select vertices and then **Finish**. Escape cancels the current drawing. Measurements use source-image pixels, or millimetres and square millimetres when a valid manifest or manual ruler scale is available. Polygon area uses the shoelace formula; use non-self-intersecting polygons for meaningful areas. Results update when calibration changes and remain on their canvas until cleared, a new manifest is loaded, or inspection tools are reconfigured. They are not saved or exported as annotations. Drawing requires a pointer or touchscreen. Image downloads do not include measurements.
 
 **Curtain:** Open Curtain to compare full-canvas painting images and IIIF `Choice` alternatives. Additional layers start hidden; select **Show** for the layer to compare. The slider reveals each visible layer from the left or top, according to the direction; layers can be hidden or moved up. A second canvas can also be selected as an overlay when both canvases declare identical dimensions. Source images must also have identical pixel dimensions. Only full-canvas images without selectors or transforms are supported; cropped or positioned painting regions are not compared. Image alignment is not automatic: matching dimensions do not guarantee that the subjects are registered. Layer settings reset when changing the comparison canvas or navigating between canvases. Image URLs use the normal image proxy routing and require appropriate CORS permissions.
 
@@ -384,7 +388,7 @@ The separate full-resolution download does not include layers, rotation or filte
 | `setManifest` | `async setManifest(jsonOrString)` | Parses and renders a manifest JSON object or string directly. |
 | `goToCanvas` | `async goToCanvas(index)` | Navigates to the specified zero-based canvas or 3D scene index. |
 | `setProxyRoutes` | `setProxyRoutes(routes)` | Updates `proxyRoutes` at runtime and reloads the active canvas/scene. |
-| `setInspectionTools` | `setInspectionTools({ physicalRuler, layersCurtain })` | Enables or disables either 2D inspection tool at runtime; omitted options retain their current values. Changing the options resets manual calibration and layer controls. |
+| `setInspectionTools` | `setInspectionTools({ physicalRuler, layersCurtain, measurement })` | Enables or disables 2D inspection tools at runtime; omitted options retain their current values. Changing the options resets manual calibration, measurements and layer controls. |
 | `resolveUrl` | `resolveUrl(url, resourceType)` | Resolves a URL through configured `proxyRoutes`, `assetProxyUrl`, or `proxyUrl`. |
 | `setTheme` | `setTheme('dark' \| 'light')` | Switches the viewer theme between dark and light mode. |
 | `setLanguage` | `setLanguage(language)` | Updates manifest, canvas, and range labels and metadata for the selected language. |

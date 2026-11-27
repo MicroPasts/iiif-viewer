@@ -104,6 +104,7 @@
   --inspection-muted: #475569;
   --inspection-border: #cbd5e1;
   position: absolute;
+  z-index: 2;
   top: 0.75rem;
   left: 0.75rem;
   width: min(20rem, calc(100% - 1.5rem));
@@ -218,3 +219,16 @@
   touch-action: none;
   cursor: crosshair;
 }
+.iiif-measurement-drawing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+.iiif-measurement-drawing.is-drawing { pointer-events: auto; touch-action: none; cursor: crosshair; }
+.iiif-measurement-path { fill: rgba(245, 158, 11, 0.2); stroke: #f59e0b; stroke-width: 3; }
+polyline.iiif-measurement-path { fill: none; }
+.iiif-measurement-point { fill: #f59e0b; stroke: #1e293b; stroke-width: 1; }
+.iiif-measurement-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.5rem; }
