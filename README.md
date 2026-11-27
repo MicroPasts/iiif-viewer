@@ -413,6 +413,8 @@ The viewer includes labeled controls, visible keyboard focus, status announcemen
 
 ## Local Development & GitHub Pages Build
 
+The demo has an optional **Take a tour** walkthrough powered by [Driver.js](https://driverjs.com/) ([MIT license](./public/driver-js-license.txt)); it is not part of the published viewer library.
+
 Use Node.js 22 and npm for local development (the current project uses Vite 6). Vite 8 requires Node.js 20.19+ or 22.12+ and a change to the docs build's `manualChunks` configuration; it is not currently configured for this project.
 
 ```bash
