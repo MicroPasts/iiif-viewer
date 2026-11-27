@@ -1,11 +1,11 @@
 import { Map, NavigationControl, Popup, LngLatBounds, setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url&inline';
+import workerUrl from '#map-worker-url';
 import { escapeHtml } from './sanitize.js';
 
 const DEFAULT_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 
-// Bundle the worker so both Vite and published library builds can resolve it.
+// Vite emits a separate worker for the demo and inlines it in library builds.
 setWorkerUrl(workerUrl);
 
 function collectCoords(geometry, out) {

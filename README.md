@@ -41,6 +41,10 @@ A framework-agnostic **IIIF Presentation API 2.x, 3.0 & 4.0** viewer built with 
 
 The Map tab displays embedded or referenced `navPlace` features from the manifest and current canvas, including supported points, lines, and polygons. Select a feature on the map or in the location list; canvas-linked locations can navigate to their canvas.
 
+The map is loaded on demand. The static demo serves its MapLibre worker as a separate same-origin asset; library builds inline the worker so consumers do not need to deploy a separate file.
+
+To check both built worker paths, run `npm run build && npm run build:docs`, then `RUN_BUILD_E2E=1 npx playwright test e2e/navplace-build.e2e.js`.
+
 The default basemap is [OpenFreeMap Liberty](https://openfreemap.org/), a free OpenStreetMap-based style that requires no API key. MapLibre displays the required map attribution. Supply `mapStyle` to use another MapLibre-compatible style. The map worker is bundled with the viewer. Restrictive Content Security Policies may need to allow `blob:` workers and `data:` module imports, as well as requests to the map provider.
 
 ---

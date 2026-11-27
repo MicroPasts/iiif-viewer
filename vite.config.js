@@ -7,6 +7,9 @@ export default defineConfig(({ mode }) => {
     return {
       base: './',
       plugins: [tailwindcss()],
+      resolve: {
+        alias: { '#map-worker-url': resolve(__dirname, 'src/map-worker-url-docs.js') },
+      },
       build: {
         outDir: 'docs',
         emptyOutDir: true,
@@ -25,6 +28,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [tailwindcss()],
+    resolve: {
+      alias: { '#map-worker-url': resolve(__dirname, 'src/map-worker-url.js') },
+    },
     server: {
       proxy: {
         '/images': {
