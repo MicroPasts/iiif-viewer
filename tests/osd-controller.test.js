@@ -24,7 +24,7 @@ vi.mock('openseadragon', () => {
       raiseEvent: (event) => [...(handlers.get(event) || [])].forEach((handler) => handler()),
       addOverlay: vi.fn(), removeOverlay: vi.fn(), destroy: vi.fn(),
       world: { getItemAt: () => ({ imageToViewportRectangle: (x, y, width, height) => ({ x, y, width, height }) }) },
-      viewport: { fitBounds: vi.fn(), zoomBy: vi.fn(), goHome: vi.fn(), getRotation: () => 270, setRotation: vi.fn(),
+      viewport: { fitBounds: vi.fn(), zoomBy: vi.fn(), goHome: vi.fn(), setFlip: vi.fn(), setRotation: vi.fn(),
         getBounds: () => ({ width: 10, height: 5 }), panBy: vi.fn(), applyConstraints: vi.fn() },
     };
     return mocks.instance;
@@ -183,10 +183,52 @@ describe('OpenSeadragon controller', () => {
     expect(mocks.instance.canvas.style.filter).toContain('brightness(70%)');
     expect(mocks.instance.canvas.style.filter).toContain('invert(1)');
     controller.rotateBy(90);
-    expect(mocks.instance.viewport.setRotation).toHaveBeenCalledWith(0);
+    expect(mocks.instance.viewport.setRotation).toHaveBeenCalledWith(90, true);
     controller.panBy(1, -1);
     expect(mocks.instance.viewport.panBy).toHaveBeenCalledWith(expect.objectContaining({ x: 2, y: -1 }));
     controller.resetFilters();
     expect(mocks.instance.canvas.style.filter).not.toContain('invert');
+  });
+
+  it('combines image-axis flips with rotation and resets all components', () => {
+    controller.rotateBy(90);
+    controller.toggleFlip('horizontal');
+    expect(mocks.instance.viewport.setFlip).toHaveBeenLastCalledWith(true);
+    expect(mocks.instance.viewport.setRotation).toHaveBeenLastCalledWith(270, true);
+    controller.toggleFlip('vertical');
+    expect(mocks.instance.viewport.setFlip).toHaveBeenLastCalledWith(false);
+    expect(mocks.instance.viewport.setRotation).toHaveBeenLastCalledWith(270, true);
+    controller.toggleFlip('horizontal');
+    expect(mocks.instance.viewport.setFlip).toHaveBeenLastCalledWith(true);
+    expect(mocks.instance.viewport.setRotation).toHaveBeenLastCalledWith(90, true);
+    controller.resetTransform();
+    expect(controller.transform).toEqual({ rotation: 0, flipHorizontal: false, flipVertical: false });
+    expect(mocks.instance.viewport.setRotation).toHaveBeenLastCalledWith(0, true);
+    expect(mocks.instance.viewport.setFlip).toHaveBeenLastCalledWith(false);
+  });
+
+  it('represents every right-angle rotation and flip combination', () => {
+    const normalize = (value) => Math.round(value * 1e6) / 1e6 || 0;
+    for (const rotation of [0, 90, 180, 270]) {
+      for (const flipHorizontal of [false, true]) {
+        for (const flipVertical of [false, true]) {
+          controller.transform = { rotation, flipHorizontal, flipVertical };
+          controller.applyTransform();
+          const flip = mocks.instance.viewport.setFlip.mock.lastCall[0];
+          const angle = mocks.instance.viewport.setRotation.mock.lastCall[0] * Math.PI / 180;
+          const requested = rotation * Math.PI / 180;
+          const rotate = (x, y, radians) => [
+            x * Math.cos(radians) - y * Math.sin(radians),
+            x * Math.sin(radians) + y * Math.cos(radians),
+          ];
+          for (const [x, y] of [[1, 0], [0, 1]]) {
+            const expected = rotate(x * (flipHorizontal ? -1 : 1), y * (flipVertical ? -1 : 1), requested);
+            const actual = rotate(x, y, angle);
+            actual[0] *= flip ? -1 : 1;
+            expect(actual.map(normalize)).toEqual(expected.map(normalize));
+          }
+        }
+      }
+    }
   });
 });

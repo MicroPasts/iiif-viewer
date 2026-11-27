@@ -75,6 +75,7 @@ export class IIIFViewer {
       layersCurtain: options.layersCurtain ?? false,
       measurement: options.measurement ?? false,
       inspector: options.inspector ?? false,
+      persistCanvasTransform: options.persistCanvasTransform ?? false,
       imageDownload: configureImageDownload(options.imageDownload),
       externalViewers: configureExternalViewers(options.externalViewers),
       height: options.height || '680px',
@@ -151,6 +152,7 @@ export class IIIFViewer {
     this.osdController = new OsdController(
       this.wrapper.querySelector('[data-el="osd-container"]'),
       {
+        onTransformChange: () => this.syncTransformUI(),
         onAnnotationClick: () => {
           this.sidebar.setOpen(true);
           this.sidebar.setTab('annotations');
@@ -260,6 +262,10 @@ export class IIIFViewer {
       if (action === 'zoom-out') this.osdController.zoomBy(0.7);
       if (action === 'zoom-home') this.osdController.goHome();
       if (action === 'rotate') this.osdController.rotateBy(90);
+      if (action === 'flip-horizontal' || action === 'flip-vertical') {
+        this.osdController.toggleFlip(action === 'flip-horizontal' ? 'horizontal' : 'vertical');
+        this.syncTransformUI();
+      }
       if (action === 'pan-left') this.osdController.panBy(-1, 0);
       if (action === 'pan-right') this.osdController.panBy(1, 0);
       if (action === 'pan-up') this.osdController.panBy(0, -1);
@@ -368,6 +374,13 @@ export class IIIFViewer {
     this.wrapper
       .querySelector('[data-filter-toggle="invert"]')
       ?.setAttribute('aria-pressed', String(invert));
+  }
+
+  syncTransformUI() {
+    for (const [axis, key] of [['horizontal', 'flipHorizontal'], ['vertical', 'flipVertical']]) {
+      this.wrapper.querySelector(`[data-action="flip-${axis}"]`)
+        ?.setAttribute('aria-pressed', String(this.osdController.transform[key]));
+    }
   }
 
   handleViewportResize() {
@@ -493,6 +506,9 @@ export class IIIFViewer {
       }
 
       this.destroyNavMap();
+      this.osdController.resetTransform();
+      this.syncTransformUI();
+      this.transformCanvas = null;
       this.state.rawManifest = raw;
       this.state.manifest = parsed;
       this.jsonInspector?.setManifest(raw, parsed);
@@ -610,6 +626,11 @@ export class IIIFViewer {
     this.state.canvasIndex = index;
     this.state.modelStats = null;
     const item = manifest.canvases[index];
+    if (this.transformCanvas && this.transformCanvas !== item && !this.options.persistCanvasTransform) {
+      this.osdController.resetTransform();
+      this.syncTransformUI();
+    }
+    this.transformCanvas = item;
     this.jsonInspector?.setCanvas(index);
     this.inspectionTools?.setCanvas(manifest, index);
     this.imageDownload?.setCanvas(item);

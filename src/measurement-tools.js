@@ -1,4 +1,5 @@
 import OpenSeadragon from 'openseadragon';
+import { imageToViewerPoint, viewerToImagePoint } from './image-coordinates.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -63,7 +64,7 @@ export class MeasurementTools {
     if (!this.mode || event.button !== 0 || !this.inspection.base) return;
     const bounds = this.svg.getBoundingClientRect();
     const pixel = new OpenSeadragon.Point(event.clientX - bounds.left, event.clientY - bounds.top);
-    const point = this.inspection.base.viewportToImageCoordinates(this.osd.viewport.pointFromPixel(pixel, true), true);
+    const point = viewerToImagePoint(this.osd, this.inspection.base, pixel);
     const size = this.inspection.base.getContentSize();
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y) ||
         point.x < 0 || point.y < 0 || point.x > size.x || point.y > size.y) {
@@ -165,7 +166,7 @@ export class MeasurementTools {
     const shapes = [...measurements, ...(this.mode ? [{ type: this.mode, points: this.points }] : [])];
     for (const shape of shapes) {
       const screenPoints = shape.points.map((point) =>
-        this.inspection.base.imageToViewerElementCoordinates(new OpenSeadragon.Point(point.x, point.y)));
+        imageToViewerPoint(this.osd, this.inspection.base, new OpenSeadragon.Point(point.x, point.y)));
       if (screenPoints.length > 1) {
         const path = document.createElementNS(SVG_NS, shape.type === 'area' && screenPoints.length >= 3 ? 'polygon' : 'polyline');
         path.setAttribute('points', screenPoints.map((point) => `${point.x},${point.y}`).join(' '));
