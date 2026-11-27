@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/micropasts/iiif-viewer.git"
+    "url": "git+https://github.com/MicroPasts/iiif-viewer.git"
   },
   "homepage": "https://micropasts.github.io/iiif-viewer/",
   "bugs": {
