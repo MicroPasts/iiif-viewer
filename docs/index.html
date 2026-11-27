@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>IIIF Viewer — Presentation 2.0, 3.0 &amp; 4.0 Sandbox</title>
-    <script type="module" crossorigin src="./assets/index-_8ohN968.js"></script>
+    <script type="module" crossorigin src="./assets/index-45erwO3X.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/openseadragon-1AIgNfqS.js">
-    <link rel="stylesheet" crossorigin href="./assets/index-LsTjAaIh.css">
+    <link rel="stylesheet" crossorigin href="./assets/index-yhl5t1Jq.css">
   </head>
   <body class="bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100 p-6 sm:p-8 font-sans">
     <div class="max-w-6xl mx-auto space-y-4">
@@ -90,7 +90,7 @@
       <section id="configuration-examples" aria-labelledby="examples-heading" class="space-y-4 pt-6">
         <div>
           <h2 id="examples-heading" class="text-xl font-bold">Configuration examples</h2>
-          <p class="text-sm text-slate-600 dark:text-slate-300">Open an example to load a separate viewer. Most use a local mock-up of a British Museum Caryatid manifest; the orientation example uses a UCLA book manifest.</p>
+          <p class="text-sm text-slate-600 dark:text-slate-300">Open an example to load a separate viewer. Most use a local mock-up of a British Museum Caryatid manifest; the orientation and comparison examples use a UCLA book manifest.</p>
         </div>
 
         <details class="rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900 p-4">
@@ -166,6 +166,19 @@
   externalViewers: false,
 });</code></pre>
             <div id="example-no-external-viewers"></div>
+          </div>
+        </details>
+
+        <details class="rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900 p-4">
+          <summary class="cursor-pointer font-semibold">Compare canvases side by side</summary>
+          <div class="space-y-3 pt-3">
+            <p class="text-sm">Select Compare to view two pages of this book. Open Comparison settings to choose another canvas, load a different manifest, or swap panes. Sync View remains available while you compare.</p>
+            <pre class="overflow-auto rounded bg-slate-900 p-3 text-xs text-white"><code>new IIIFViewer('#example-side-by-side', {
+  manifestUrl: 'https://iiif.library.ucla.edu/ark%3A%2F21198%2Fn16c9s/manifest',
+  showSidebar: false,
+  sideBySide: true,
+});</code></pre>
+            <div id="example-side-by-side"></div>
           </div>
         </details>
 

@@ -6,6 +6,41 @@ A framework-agnostic **IIIF Presentation API 2.x, 3.0 & 4.0** viewer built with 
 * **Repository:** https://github.com/micropasts/iiif-viewer
 * **Author:** Daniel Pett ([MicroPasts](https://github.com/micropasts))
 
+## Table of contents
+
+- [Screenshot of interface](#screenshot-of-interface)
+- [Features](#features)
+  - [Current limitations](#current-limitations)
+  - [Sidebar](#sidebar)
+  - [Maps](#maps)
+- [Installation](#installation)
+  - [From npm](#from-npm)
+  - [From GitHub Packages](#from-github-packages)
+- [Quick Start](#quick-start)
+  - [Vanilla JS / ES Modules](#vanilla-js--es-modules)
+  - [Load a manifest without the URL bar](#load-a-manifest-without-the-url-bar)
+  - [Configure external viewer links](#configure-external-viewer-links)
+  - [Language and selection callbacks](#language-and-selection-callbacks)
+  - [Using Custom Proxy Routes (Local Dev / CORS)](#using-custom-proxy-routes-local-dev--cors)
+  - [Passing an Inline Manifest Object](#passing-an-inline-manifest-object)
+- [Framework Integration Examples](#framework-integration-examples)
+  - [UMD Script Tag](#umd-script-tag)
+  - [React](#react)
+  - [Vue 3](#vue-3)
+- [Configuration Options](#configuration-options)
+  - [Physical ruler, measurement and image curtain](#physical-ruler-measurement-and-image-curtain)
+  - [Side-by-side comparison](#side-by-side-comparison)
+  - [Persistent canvas orientation](#persistent-canvas-orientation)
+  - [Share a view](#share-a-view)
+  - [Inspect IIIF JSON](#inspect-iiif-json)
+  - [Download an image](#download-an-image)
+- [Instance Methods](#instance-methods)
+  - [Keyboard shortcuts](#keyboard-shortcuts)
+  - [Accessibility](#accessibility)
+- [Local Development & GitHub Pages Build](#local-development--github-pages-build)
+- [Contributing, citation, and security](#contributing-citation-and-security)
+- [License](#license)
+
 ### Screenshot of interface
 
 ![Screenshot of the IIIF Viewer interface](https://raw.githubusercontent.com/MicroPasts/iiif-viewer/main/images/screenshot-iiif.png)
@@ -15,6 +50,7 @@ A framework-agnostic **IIIF Presentation API 2.x, 3.0 & 4.0** viewer built with 
 * **IIIF Presentation 2.x, 3.0 & 4.0 Support:** Detects and normalizes common Presentation 2.x (`sequences`/`canvases`), Presentation 3.0 (`items`/`AnnotationPage`), and Presentation 4.0 (`Scene`/`Model`/`SpecificResource`) structures. A Presentation 3 annotation page with painting annotations can also be loaded directly.
 * **Deep-Zoom 2D & Interactive 3D in One Filmstrip:** Switch between OpenSeadragon tiled/static 2D images and a Three.js WebGL 3D scene viewer (`GLTFLoader` + `DRACOLoader`). The 3D controls include camera presets and reset, auto-rotate, wireframe, raking light, model statistics, a local file picker, and IIIF `RotateTransform` / `ScaleTransform` / `TranslateTransform` support.
 * **Image Inspection & Annotations:** Zoom, rotate, and adjust brightness, contrast, grayscale, and inversion for 2D images. Image controls are hidden for 3D scenes and filter settings are retained when returning to 2D. The Notes panel displays embedded or referenced annotation text and can focus on supported rectangular `xywh` regions.
+* **Optional Side-by-Side Comparison:** Compare two canvases or 3D scenes, including across manifests, with synchronized 2D navigation and pane-aware information.
 * **Search & Navigation:** Browse thumbnails and nested ranges, or search through a supported IIIF Search API service with a local manifest search fallback. Manifest URLs or IIIF links can also be dropped onto the viewer.
 * **Maps & Languages:** Display manifest and current-canvas `navPlace` features on a MapLibre map. Choose among available metadata languages in the sidebar or set a preferred language programmatically.
 * **Configurable Proxy Routing:** Rewrite manifest, `info.json`, static image, model, thumbnail, annotation, search, and `navPlace` URLs through custom prefixes, regex rules, functions, or proxy endpoints via `proxyRoutes`, `proxyUrl`, and `assetProxyUrl`.
@@ -126,7 +162,7 @@ The manifest and its resources must be accessible to the browser, including any 
 
 Drag-and-drop is enabled by default, independently of the URL bar. Disabling it only prevents manifest drops; image and model drag controls still work, and your application can still call `viewer.loadManifest(url)`. These options are not access controls. The preset buttons in the demo are part of the demo page, not the viewer; omit them from your page if they are not needed.
 
-For interactive examples, open [Configuration examples in the demo](https://micropasts.github.io/iiif-viewer/#configuration-examples). They include selected information tabs, a resizable information panel, a hidden URL bar, disabled manifest drops, a sidebar initially closed, hidden external viewer links, and image downloading. `showSidebar: false` does not remove the sidebar; the Info button can still open it. Most examples use a [local copy of the supplied Caryatid manifest](./public/examples/caryatid-manifest.json); images are served by the British Museum and remain subject to the rights statement in the manifest.
+For interactive examples, open [Configuration examples in the demo](https://micropasts.github.io/iiif-viewer/#configuration-examples). They include side-by-side comparison, selected information tabs, a resizable information panel, a hidden URL bar, disabled manifest drops, a sidebar initially closed, hidden external viewer links, and image downloading. `showSidebar: false` does not remove the sidebar; the Info button can still open it. Most examples use a [local copy of the supplied Caryatid manifest](./public/examples/caryatid-manifest.json); images are served by the British Museum and remain subject to the rights statement in the manifest.
 
 ### Configure external viewer links
 
@@ -325,6 +361,7 @@ onBeforeUnmount(() => viewer?.destroy());
 | `summaryCollapseLength` | `number` | `300` | Plain-text summary length above which a Show more control appears; set to `0` or a negative number to disable collapsing. |
 | `physicalRuler` | `boolean` | `false` | Enable the physical scale and manual calibration controls for 2D images. |
 | `layersCurtain` | `boolean` | `false` | Enable the image-layer curtain and comparison canvas controls for 2D images. |
+| `sideBySide` | `boolean` | `false` | Enable the Compare button and programmatic split-pane comparison. |
 | `measurement` | `boolean` | `false` | Enable point-to-point, polyline and area measurement for 2D images. |
 | `persistCanvasTransform` | `boolean` | `false` | Keep 2D rotation and horizontal/vertical flips when navigating within a manifest. |
 | `permalink` | `boolean \| object` | `false` | Enable copyable view links and URL restoration; use `{ prefix: 'name' }` to isolate multiple viewers. |
@@ -343,6 +380,7 @@ onBeforeUnmount(() => viewer?.destroy());
 | `onManifestLoad` | `function` | `null` | Called as `(parsedManifest, rawManifest)` after parsing, before all resources necessarily finish loading. |
 | `onCanvasChange` | `function` | `null` | Called as `(canvas, index)` when a canvas or scene is selected. |
 | `onSelectLocation` | `function` | `null` | Called as `(feature, { canvasIndex })` when a location is selected from the map or list. The index can be absent or `null` for a manifest-level location. Map clicks provide a MapLibre feature; list selections provide a normalized GeoJSON feature. |
+| `onCompareChange` | `function` | `null` | Called when comparison opens, closes, or the secondary canvas or manifest changes. |
 
 `onSelectScene` receives the container element, normalized scene data (`modelUrl`, `format`, `transforms`, and `thumbnail`), and `{ theme, title }`. The `modelUrl` is already resolved through proxy routing. The returned instance may implement `destroy()`, `setTheme(theme)`, and `handleResize()`; the viewer calls these when available.
 
@@ -366,6 +404,14 @@ const viewer = new IIIFViewer('#viewer', {
 **Measurement:** Open Measure, choose a type and select **Start**. Select two image points for a point-to-point distance; for a polyline or polygon area, select vertices and then **Finish**. Escape cancels the current drawing. Measurements use source-image pixels, or millimetres and square millimetres when a valid manifest or manual ruler scale is available. Polygon area uses the shoelace formula; use non-self-intersecting polygons for meaningful areas. Results update when calibration changes and remain on their canvas until cleared, a new manifest is loaded, or inspection tools are reconfigured. They are not saved or exported as annotations. Drawing requires a pointer or touchscreen. Image downloads do not include measurements.
 
 **Curtain:** Open Curtain to compare full-canvas painting images and IIIF `Choice` alternatives. Additional layers start hidden; select **Show** for the layer to compare. The slider reveals each visible layer from the left or top, according to the direction; layers can be hidden or moved up. A second canvas can also be selected as an overlay when both canvases declare identical dimensions. Source images must also have identical pixel dimensions. Only full-canvas images without selectors or transforms are supported; cropped or positioned painting regions are not compared. Image alignment is not automatic: matching dimensions do not guarantee that the subjects are registered. Layer settings reset when changing the comparison canvas or navigating between canvases. Image URLs use the normal image proxy routing and require appropriate CORS permissions.
+
+### Side-by-side comparison
+
+Set `sideBySide: true` and select **Compare** to open a second pane. Open **Comparison settings** to choose a canvas or scene, swap panes, or, when `showUrlInput` is enabled, load a secondary manifest URL. The settings panel is non-modal; close it with its close button or Escape. Manifest requests use the configured manifest proxy and `fetchOptions`; images, models, annotations and maps use normal asset routing and require appropriate CORS permissions. **Use primary manifest** returns to the main resource. The filmstrip always controls the primary pane; focus or interact with a pane to make the Info panel follow it. The toolbar's zoom, rotation and filters apply to the active 2D pane. Ruler, measurement, curtain, downloads and permalinks remain bound to the primary pane.
+
+**Sync View** starts enabled for two 2D canvases and synchronizes normalized image centers and zoom relative to each image's home view. It can be unlocked and is unavailable for 3D scenes. Different aspect ratios, viewport constraints and rotations can still produce different visible regions; this is not image registration. The panes stack on narrow screens. **Swap Panes** exchanges canvases; when manifests differ it promotes the secondary manifest to primary and retains the former primary as secondary. Loading a new primary manifest or closing comparison disposes the secondary pane.
+
+The callback receives `{ open, activePane, secondaryManifest, secondaryManifestUrl, secondaryCanvasIndex, secondaryCanvas }`; secondary fields are `null` on close. Programmatic `enterSideBySide()` requires both the option and a loaded manifest. Unlike `layersCurtain`, this mode does not overlay or align image layers, and can compare 2D and 3D resources.
 
 ### Persistent canvas orientation
 
@@ -418,6 +464,9 @@ The separate full-resolution download does not include layers, rotation, flips o
 | `goToCanvas` | `async goToCanvas(index)` | Navigates to the specified zero-based canvas or 3D scene index. |
 | `setProxyRoutes` | `setProxyRoutes(routes)` | Updates `proxyRoutes` at runtime and reloads the active canvas/scene. |
 | `setInspectionTools` | `setInspectionTools({ physicalRuler, layersCurtain, measurement })` | Enables or disables 2D inspection tools at runtime; omitted options retain their current values. Changing the options resets manual calibration, measurements and layer controls. |
+| `enterSideBySide` | `enterSideBySide()` | Opens comparison when enabled and a manifest is loaded; otherwise throws. |
+| `exitSideBySide` | `exitSideBySide()` | Closes comparison and disposes secondary resources. |
+| `toggleSideBySide` | `toggleSideBySide()` | Opens or closes comparison. |
 | `getPermalink` | `getPermalink()` | Returns a shareable URL for the loaded 2D image view when `permalink` is enabled; throws if the view cannot be shared. |
 | `resolveUrl` | `resolveUrl(url, resourceType)` | Resolves a URL through configured `proxyRoutes`, `assetProxyUrl`, or `proxyUrl`. |
 | `setTheme` | `setTheme('dark' \| 'light')` | Switches the viewer theme between dark and light mode. |
