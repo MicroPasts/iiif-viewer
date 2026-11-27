@@ -14,6 +14,7 @@ import { ManifestSearchController } from './search-controller.js';
 import { renderShell } from './template.js';
 import { InspectionTools } from './inspection-tools.js';
 import { ImageDownload, configureImageDownload } from './image-download.js';
+import { JsonInspector } from './json-inspector.js';
 
 function extractDroppedManifestUrl(dataTransfer) {
   if (!dataTransfer) return null;
@@ -73,6 +74,7 @@ export class IIIFViewer {
       physicalRuler: options.physicalRuler ?? false,
       layersCurtain: options.layersCurtain ?? false,
       measurement: options.measurement ?? false,
+      inspector: options.inspector ?? false,
       imageDownload: configureImageDownload(options.imageDownload),
       externalViewers: configureExternalViewers(options.externalViewers),
       height: options.height || '680px',
@@ -139,6 +141,7 @@ export class IIIFViewer {
       allowManifestDrop: this.options.allowManifestDrop,
       currentUrl: this.state.currentUrl,
       height: this.options.height,
+      inspector: this.options.inspector,
     });
 
     this.container.innerHTML = '';
@@ -157,6 +160,7 @@ export class IIIFViewer {
     );
 
     this.createInspectionTools();
+    if (this.options.inspector) this.jsonInspector = new JsonInspector(this.wrapper);
     if (this.options.imageDownload) {
       this.imageDownload = new ImageDownload(this.wrapper, this.osdController, this.options.imageDownload, {
         resolveUrl: (url, type) => this.resolveUrl(url, type),
@@ -248,6 +252,7 @@ export class IIIFViewer {
       if (!actionEl) return;
 
       const action = actionEl.dataset.action;
+      if (action === 'toggle-json-inspector') this.jsonInspector?.toggle();
       if (action === 'toggle-theme') this.toggleTheme();
       if (action === 'toggle-sidebar') this.toggleSidebar();
       if (action === 'toggle-fullscreen') this.toggleFullscreen();
@@ -419,6 +424,7 @@ export class IIIFViewer {
         (c.kind === 'scene' ? `3D Scene ${idx + 1}` : `Canvas ${idx + 1}`);
     });
     this.inspectionTools?.setLanguage(lang);
+    this.jsonInspector?.setLanguage();
 
     const relabelTree = (nodes) =>
       nodes.forEach((n) => {
@@ -489,6 +495,7 @@ export class IIIFViewer {
       this.destroyNavMap();
       this.state.rawManifest = raw;
       this.state.manifest = parsed;
+      this.jsonInspector?.setManifest(raw, parsed);
       this.inspectionTools?.resetManifest();
       this.state.canvasIndex = Math.min(this.options.initialCanvas, parsed.canvases.length - 1);
       this.setError(null);
@@ -603,6 +610,7 @@ export class IIIFViewer {
     this.state.canvasIndex = index;
     this.state.modelStats = null;
     const item = manifest.canvases[index];
+    this.jsonInspector?.setCanvas(index);
     this.inspectionTools?.setCanvas(manifest, index);
     this.imageDownload?.setCanvas(item);
 
@@ -795,6 +803,7 @@ export class IIIFViewer {
     this.destroyNavMap();
     this.destroySceneViewer();
     this.inspectionTools?.destroy();
+    this.jsonInspector?.destroy();
     this.imageDownload?.destroy();
     this.osdController?.destroy();
     this.container.innerHTML = '';

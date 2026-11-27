@@ -322,6 +322,7 @@ onBeforeUnmount(() => viewer?.destroy());
 | `physicalRuler` | `boolean` | `false` | Enable the physical scale and manual calibration controls for 2D images. |
 | `layersCurtain` | `boolean` | `false` | Enable the image-layer curtain and comparison canvas controls for 2D images. |
 | `measurement` | `boolean` | `false` | Enable point-to-point, polyline and area measurement for 2D images. |
+| `inspector` | `boolean` | `false` | Enable the IIIF JSON inspector drawer for manifests and the current canvas or scene. |
 | `imageDownload` | `boolean \| object` | `false` | Enable full-canvas image downloads; optionally configure sizes, limits and full-resolution access. |
 | `height` | `string` | `'680px'` | CSS height of the viewer container when not in fullscreen; the viewer has a 540px minimum height. |
 | `showUrlInput` | `boolean` | `true` | Shows or hides the manifest URL input bar in the top toolbar. |
@@ -355,6 +356,12 @@ const viewer = new IIIFViewer('#viewer', {
 **Measurement:** Open Measure, choose a type and select **Start**. Select two image points for a point-to-point distance; for a polyline or polygon area, select vertices and then **Finish**. Escape cancels the current drawing. Measurements use source-image pixels, or millimetres and square millimetres when a valid manifest or manual ruler scale is available. Polygon area uses the shoelace formula; use non-self-intersecting polygons for meaningful areas. Results update when calibration changes and remain on their canvas until cleared, a new manifest is loaded, or inspection tools are reconfigured. They are not saved or exported as annotations. Drawing requires a pointer or touchscreen. Image downloads do not include measurements.
 
 **Curtain:** Open Curtain to compare full-canvas painting images and IIIF `Choice` alternatives. Additional layers start hidden; select **Show** for the layer to compare. The slider reveals each visible layer from the left or top, according to the direction; layers can be hidden or moved up. A second canvas can also be selected as an overlay when both canvases declare identical dimensions. Source images must also have identical pixel dimensions. Only full-canvas images without selectors or transforms are supported; cropped or positioned painting regions are not compared. Image alignment is not automatic: matching dimensions do not guarantee that the subjects are registered. Layer settings reset when changing the comparison canvas or navigating between canvases. Image URLs use the normal image proxy routing and require appropriate CORS permissions.
+
+### Inspect IIIF JSON
+
+Set `inspector: true` to add an Inspector toolbar button. The drawer overlays the viewer without changing its viewport. Choose **Manifest** or **Current canvas** to inspect the original loaded JSON as a lazily expandable tree or syntax-highlighted raw JSON. The current canvas selection follows navigation; the manifest view shows the active canvas in its context label. Copy or download exports the selected JSON, formatted with indentation. Clipboard access requires a browser secure context and permission.
+
+The inspector displays the loaded resource, not the viewer's normalized data: separately fetched annotation pages or other linked resources are not expanded. For standalone AnnotationPage inputs, synthetic viewer canvases have no original canvas JSON, so only the loaded page can be inspected.
 
 ### Download an image
 

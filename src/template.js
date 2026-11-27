@@ -2,7 +2,7 @@ import { escapeHtml } from './sanitize.js';
 
 let nextViewerId = 0;
 
-export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl, height }) {
+export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl, height, inspector = false }) {
   const id = `iiif-viewer-${++nextViewerId}`;
   const urlBar = showUrlInput
     ? `
@@ -51,6 +51,8 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
 
           <div data-el="inspection-buttons" class="iiif-inspection-buttons" role="group" aria-label="Image inspection tools" hidden></div>
           <div data-el="download-button" class="iiif-inspection-buttons" hidden></div>
+
+          ${inspector ? `<button type="button" data-action="toggle-json-inspector" aria-expanded="false" aria-controls="${id}-json-inspector" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 aria-expanded:bg-purple-600 aria-expanded:text-white transition">Inspector</button>` : ''}
 
           <button type="button" data-action="toggle-sidebar" title="Toggle Info Panel (I)" aria-expanded="false" aria-controls="${id}-sidebar" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 aria-expanded:bg-purple-600 aria-expanded:hover:bg-purple-700 aria-expanded:border-purple-600 aria-expanded:text-white transition">
             Info
@@ -158,6 +160,7 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
           </div>
           <div id="${id}-panel" data-el="sidebar-content" role="tabpanel" aria-labelledby="${id}-tab-metadata" tabindex="0" class="iiif-scroll flex-1 overflow-y-auto p-4 text-xs space-y-4"></div>
         </aside>
+        ${inspector ? `<aside id="${id}-json-inspector" data-el="json-inspector" class="iiif-json-inspector" aria-label="IIIF JSON inspector" hidden></aside>` : ''}
       </div>
 
       <!-- Bottom Thumbnail Strip -->
