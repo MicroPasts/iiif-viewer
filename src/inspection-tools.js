@@ -3,6 +3,7 @@ import { escapeHtml } from './sanitize.js';
 import { extractLangValue } from './parser.js';
 import { preserveSecureTileUrls } from './iiif-tile-source.js';
 import { MeasurementTools } from './measurement-tools.js';
+import { viewerToImagePoint } from './image-coordinates.js';
 
 function sourceFor(image, resolveUrl) {
   if (image?.infoJsonUrl) return resolveUrl(image.infoJsonUrl, 'image');
@@ -84,6 +85,8 @@ export class InspectionTools {
     this.osd.addHandler('open-failed', this.onOpenFailed);
     this.osd.addHandler('animation', this.onAnimation);
     this.osd.addHandler('resize', this.onAnimation);
+    this.osd.addHandler('flip', this.onAnimation);
+    this.osd.addHandler('rotate', this.onAnimation);
     this.onKeyDown = (event) => {
       if (event.key === 'Escape' && this.drawing) {
         this.cancelDrawing();
@@ -394,8 +397,8 @@ export class InspectionTools {
   finishLine(event) {
     if (!this.lineStart || !this.base) return;
     const end = this.linePosition(event);
-    const startImage = this.base.viewportToImageCoordinates(this.osd.viewport.pointFromPixel(this.lineStart, true), true);
-    const endImage = this.base.viewportToImageCoordinates(this.osd.viewport.pointFromPixel(end, true), true);
+    const startImage = viewerToImagePoint(this.osd, this.base, this.lineStart);
+    const endImage = viewerToImagePoint(this.osd, this.base, end);
     const size = this.base.getContentSize();
     const inImage = (point) => point.x >= 0 && point.y >= 0 && point.x <= size.x && point.y <= size.y;
     this.linePixels = inImage(startImage) && inImage(endImage)
@@ -456,6 +459,8 @@ export class InspectionTools {
     this.osd.removeHandler('open-failed', this.onOpenFailed);
     this.osd.removeHandler('animation', this.onAnimation);
     this.osd.removeHandler('resize', this.onAnimation);
+    this.osd.removeHandler('flip', this.onAnimation);
+    this.osd.removeHandler('rotate', this.onAnimation);
     this.host.removeEventListener('click', this.onClick);
     this.toolbar.removeEventListener('click', this.onClick);
     this.host.removeEventListener('input', this.onInput);

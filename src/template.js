@@ -100,6 +100,10 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
               <button type="button" data-action="pan-down" aria-label="Move image view down" class="px-2 rounded border border-slate-300 dark:border-slate-700">&darr;</button>
               <button type="button" data-action="pan-right" aria-label="Move image view right" class="px-2 rounded border border-slate-300 dark:border-slate-700">&rarr;</button>
             </div>
+            <div role="group" aria-label="Flip image" class="flex items-center gap-2">
+              <button type="button" data-action="flip-horizontal" aria-pressed="false" class="flex-1 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 aria-pressed:bg-purple-600 aria-pressed:text-white">Flip horizontal</button>
+              <button type="button" data-action="flip-vertical" aria-pressed="false" class="flex-1 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 aria-pressed:bg-purple-600 aria-pressed:text-white">Flip vertical</button>
+            </div>
             <label class="block space-y-1">
               <div class="flex justify-between text-[11px] text-slate-600 dark:text-slate-300">
                 <span>Brightness</span>

@@ -2,9 +2,10 @@ import OpenSeadragon from 'openseadragon';
 import { preserveSecureTileUrls } from './iiif-tile-source.js';
 
 export class OsdController {
-  constructor(element, { onAnnotationClick = null } = {}) {
+  constructor(element, { onAnnotationClick = null, onTransformChange = null } = {}) {
     this.element = element;
     this.onAnnotationClick = onAnnotationClick;
+    this.onTransformChange = onTransformChange;
     this.overlays = [];
     this.pendingAnnotationHandler = null;
     this.pendingAnnotations = [];
@@ -12,6 +13,7 @@ export class OsdController {
     this.imageGeneration = 0;
     this.awaitingImage = false;
     this.showAnnotations = true;
+    this.transform = { rotation: 0, flipHorizontal: false, flipVertical: false };
     this.filters = {
       brightness: 100,
       contrast: 100,
@@ -31,6 +33,23 @@ export class OsdController {
     });
     this.osd.canvas.setAttribute('role', 'group');
     this.osd.canvas.setAttribute('aria-label', 'Image viewer. Use arrow keys to pan and plus or minus to zoom.');
+    this.onRotate = ({ degrees }) => {
+      if (this.applyingTransform) return;
+      const { flipHorizontal, flipVertical } = this.transform;
+      const angle = flipHorizontal !== flipVertical ? -degrees : degrees;
+      this.transform.rotation = ((angle - (flipVertical ? 180 : 0)) % 360 + 360) % 360;
+      this.onTransformChange?.(this.transform);
+    };
+    this.onFlip = () => {
+      if (this.applyingTransform) return;
+      const quarterTurns = this.transform.rotation / 90;
+      const axis = Number.isInteger(quarterTurns) && quarterTurns % 2 ? 'flipVertical' : 'flipHorizontal';
+      this.transform[axis] = !this.transform[axis];
+      if (!Number.isInteger(quarterTurns)) this.transform.rotation = (360 - this.transform.rotation) % 360;
+      this.onTransformChange?.(this.transform);
+    };
+    this.osd.addHandler('rotate', this.onRotate);
+    this.osd.addHandler('flip', this.onFlip);
   }
 
   open(tileSource, annotations = [], focusAnnotation = null) {
@@ -166,8 +185,33 @@ export class OsdController {
   }
 
   rotateBy(deg = 90) {
-    const current = this.osd.viewport?.getRotation() || 0;
-    this.osd.viewport?.setRotation((current + deg) % 360);
+    this.transform.rotation = ((this.transform.rotation + deg) % 360 + 360) % 360;
+    this.applyTransform();
+  }
+
+  toggleFlip(axis) {
+    const key = axis === 'horizontal' ? 'flipHorizontal' : 'flipVertical';
+    this.transform[key] = !this.transform[key];
+    this.applyTransform();
+  }
+
+  resetTransform() {
+    this.transform = { rotation: 0, flipHorizontal: false, flipVertical: false };
+    this.applyTransform();
+  }
+
+  applyTransform() {
+    const { rotation, flipHorizontal, flipVertical } = this.transform;
+    const flipped = flipHorizontal !== flipVertical;
+    const angle = (rotation + (flipVertical ? 180 : 0)) % 360;
+    this.applyingTransform = true;
+    try {
+      this.osd.viewport.setFlip(flipped);
+      this.osd.viewport.setRotation((flipped ? 360 - angle : angle) % 360, true);
+    } finally {
+      this.applyingTransform = false;
+    }
+    this.onTransformChange?.(this.transform);
   }
 
   setFilter(patch) {
@@ -201,6 +245,8 @@ export class OsdController {
 
   destroy() {
     this.clearAnnotations();
+    this.osd.removeHandler('rotate', this.onRotate);
+    this.osd.removeHandler('flip', this.onFlip);
     this.osd?.destroy();
   }
 }

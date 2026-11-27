@@ -322,6 +322,7 @@ onBeforeUnmount(() => viewer?.destroy());
 | `physicalRuler` | `boolean` | `false` | Enable the physical scale and manual calibration controls for 2D images. |
 | `layersCurtain` | `boolean` | `false` | Enable the image-layer curtain and comparison canvas controls for 2D images. |
 | `measurement` | `boolean` | `false` | Enable point-to-point, polyline and area measurement for 2D images. |
+| `persistCanvasTransform` | `boolean` | `false` | Keep 2D rotation and horizontal/vertical flips when navigating within a manifest. |
 | `inspector` | `boolean` | `false` | Enable the IIIF JSON inspector drawer for manifests and the current canvas or scene. |
 | `imageDownload` | `boolean \| object` | `false` | Enable full-canvas image downloads; optionally configure sizes, limits and full-resolution access. |
 | `height` | `string` | `'680px'` | CSS height of the viewer container when not in fullscreen; the viewer has a 540px minimum height. |
@@ -357,6 +358,10 @@ const viewer = new IIIFViewer('#viewer', {
 
 **Curtain:** Open Curtain to compare full-canvas painting images and IIIF `Choice` alternatives. Additional layers start hidden; select **Show** for the layer to compare. The slider reveals each visible layer from the left or top, according to the direction; layers can be hidden or moved up. A second canvas can also be selected as an overlay when both canvases declare identical dimensions. Source images must also have identical pixel dimensions. Only full-canvas images without selectors or transforms are supported; cropped or positioned painting regions are not compared. Image alignment is not automatic: matching dimensions do not guarantee that the subjects are registered. Layer settings reset when changing the comparison canvas or navigating between canvases. Image URLs use the normal image proxy routing and require appropriate CORS permissions.
 
+### Persistent canvas orientation
+
+The rotate button turns the 2D image by 90 degrees; horizontal and vertical image-axis flips are available in **Filters**. By default, rotation and flips reset when navigating to a different canvas or 3D scene. Set `persistCanvasTransform: true` to carry them between canvases in the same manifest, including when passing through a 3D scene. Loading a new manifest always resets the orientation. The setting does not affect 3D camera orientation, zoom, pan or filters. The Reset view button resets zoom and pan, not orientation.
+
 ### Inspect IIIF JSON
 
 Set `inspector: true` to add an Inspector toolbar button. The drawer overlays the viewer without changing its viewport. Choose **Manifest** or **Current canvas** to inspect the original loaded JSON as a lazily expandable tree or syntax-highlighted raw JSON. The current canvas selection follows navigation; the manifest view shows the active canvas in its context label. Copy or download exports the selected JSON, formatted with indentation. Clipboard access requires a browser secure context and permission.
@@ -365,7 +370,7 @@ The inspector displays the loaded resource, not the viewer's normalized data: se
 
 ### Download an image
 
-The optional Download toolbar control exports a full-canvas PNG, including visible curtain layers, the current right-angle rotation and image filters. It does not include zoom, annotations, or the ruler. Set `imageDownload: true` to use the default width presets of 500, 1000 and 2000 pixels and a 16-million-pixel output limit, or configure them:
+The optional Download toolbar control exports a full-canvas PNG, including visible curtain layers, the current right-angle rotation, flips and image filters. It does not include zoom, annotations, or the ruler. Set `imageDownload: true` to use the default width presets of 500, 1000 and 2000 pixels and a 16-million-pixel output limit, or configure them:
 
 ```js
 new IIIFViewer('#viewer', {
@@ -383,7 +388,7 @@ new IIIFViewer('#viewer', {
 
 Sizes advertised in the manifest and image-service `info.json` are listed, along with supported width presets and a full-resolution composite. Sizes exceeding either source's service limits, the configured limits, or `maxPixels` are disabled with a reason. `maxWidth` and `maxHeight` are optional positive integer bounds; `excludeSizes` excludes exact unrotated output dimensions. `allowOriginal` defaults to `true`; setting it to `false` hides both full-resolution choices, including the composite. Width presets are offered only for services advertising width resizing. All visible comparison layers must support the selected size; incompatibilities are reported on export.
 
-The separate full-resolution download does not include layers, rotation or filters. For a static image it downloads the manifest image file; for an IIIF service it requests the full-resolution JPEG, which is a service derivative and not necessarily the archival original. Both are subject to `maxWidth`, `maxHeight`, `excludeSizes` and service limits, but not `maxPixels` (which limits canvas exports). The true original file is not generally exposed by an IIIF image service. Composite exports of partial-canvas painting images and 3D scenes are not supported. Requests use image proxy routing; the image service and all selected layers must allow browser CORS access. Errors are shown in the panel. Exporting does not grant permission to reuse an image: consult the provider's rights and terms.
+The separate full-resolution download does not include layers, rotation, flips or filters. For a static image it downloads the manifest image file; for an IIIF service it requests the full-resolution JPEG, which is a service derivative and not necessarily the archival original. Both are subject to `maxWidth`, `maxHeight`, `excludeSizes` and service limits, but not `maxPixels` (which limits canvas exports). The true original file is not generally exposed by an IIIF image service. Composite exports of partial-canvas painting images and 3D scenes are not supported. Requests use image proxy routing; the image service and all selected layers must allow browser CORS access. Errors are shown in the panel. Exporting does not grant permission to reuse an image: consult the provider's rights and terms.
 
 ---
 

@@ -10,6 +10,12 @@ vi.mock('../src/osd-controller.js', () => ({
       this.clearAnnotations = vi.fn(); this.renderAnnotationOverlays = vi.fn();
       this.focusAnnotation = vi.fn();
       this.zoomBy = vi.fn(); this.goHome = vi.fn(); this.rotateBy = vi.fn(); this.panBy = vi.fn();
+      this.transform = { rotation: 0, flipHorizontal: false, flipVertical: false };
+      this.resetTransform = vi.fn(() => { this.transform = { rotation: 0, flipHorizontal: false, flipVertical: false }; });
+      this.toggleFlip = vi.fn((axis) => {
+        const key = axis === 'horizontal' ? 'flipHorizontal' : 'flipVertical';
+        this.transform[key] = !this.transform[key];
+      });
       this.filters = { brightness: 100, contrast: 100, invert: false, grayscale: false };
       this.setFilter = vi.fn(); this.resetFilters = vi.fn();
       mocks.osd = this;
@@ -45,6 +51,22 @@ afterEach(() => {
 });
 
 describe('IIIF viewer', () => {
+  it.each([false, true])('handles transform navigation with persistence %s', async (persistCanvasTransform) => {
+    viewer = new IIIFViewer(container, { manifest, persistCanvasTransform });
+    const controller = mocks.osd;
+    controller.resetTransform.mockClear();
+    container.querySelector('[data-action="flip-horizontal"]').click();
+    expect(container.querySelector('[data-action="flip-horizontal"]').getAttribute('aria-pressed')).toBe('true');
+    await viewer.goToCanvas(0);
+    expect(controller.resetTransform).not.toHaveBeenCalled();
+    await viewer.goToCanvas(1);
+    expect(controller.resetTransform).toHaveBeenCalledTimes(persistCanvasTransform ? 0 : 1);
+    expect(container.querySelector('[data-action="flip-horizontal"]').getAttribute('aria-pressed')).toBe(String(persistCanvasTransform));
+    await viewer.setManifest(manifest);
+    expect(controller.resetTransform).toHaveBeenCalledTimes(persistCanvasTransform ? 1 : 2);
+    expect(container.querySelector('[data-action="flip-horizontal"]').getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('only shows the canvas pager for multiple navigable items', async () => {
     viewer = new IIIFViewer(container);
     const pager = container.querySelector('[data-el="pager-controls"]');

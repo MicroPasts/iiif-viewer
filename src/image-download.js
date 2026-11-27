@@ -239,6 +239,7 @@ export class ImageDownload {
     if (layers === null) return this.status('Comparison layers are still loading or failed to load; resolve the curtain errors before exporting.');
     const filters = { ...this.controller.filters };
     const rotation = this.controller.osd.viewport.getRotation();
+    const flipped = this.controller.osd.viewport.getFlip();
     button.disabled = true;
     this.host.querySelector('[data-download="original"]').disabled = true;
     this.status('Preparing image…');
@@ -279,6 +280,7 @@ export class ImageDownload {
       if (!out) throw new Error('Canvas rendering is unavailable.');
       out.filter = `brightness(${filters.brightness}%) contrast(${filters.contrast}%)${filters.invert ? ' invert(1)' : ''}${filters.grayscale ? ' grayscale(1)' : ''}`;
       out.translate(output.width / 2, output.height / 2);
+      if (flipped) out.scale(-1, 1);
       out.rotate(degrees * Math.PI / 180);
       out.drawImage(composite, -size.width / 2, -size.height / 2);
       const blob = await outputBlob(output);
