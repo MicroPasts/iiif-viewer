@@ -16,6 +16,8 @@ vi.mock('../src/osd-controller.js', () => ({
         const key = axis === 'horizontal' ? 'flipHorizontal' : 'flipVertical';
         this.transform[key] = !this.transform[key];
       });
+      this.applyTransform = vi.fn();
+      this.getViewRegion = vi.fn(() => [10, 20, 30, 40]);
       this.filters = { brightness: 100, contrast: 100, invert: false, grayscale: false };
       this.setFilter = vi.fn(); this.resetFilters = vi.fn();
       mocks.osd = this;
@@ -51,6 +53,23 @@ afterEach(() => {
 });
 
 describe('IIIF viewer', () => {
+  it('only shares the URL of the successfully loaded manifest', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => manifest })
+      .mockResolvedValueOnce({ ok: false, status: 404, statusText: 'Not Found' });
+    vi.stubGlobal('fetch', fetch);
+    viewer = new IIIFViewer(container, { permalink: { prefix: 'book' } });
+    await viewer.loadManifest('https://example.test/manifest');
+    let url = new URL(viewer.getPermalink());
+    expect(url.searchParams.get('book-manifest')).toBe('https://example.test/manifest');
+    expect(url.searchParams.get('book-xywh')).toBe('10,20,30,40');
+    await viewer.loadManifest('https://example.test/missing');
+    url = new URL(viewer.getPermalink());
+    expect(url.searchParams.get('book-manifest')).toBe('https://example.test/manifest');
+    await viewer.setManifest(manifest);
+    expect(() => viewer.getPermalink()).toThrow('not loaded from a shareable URL');
+  });
+
   it.each([false, true])('handles transform navigation with persistence %s', async (persistCanvasTransform) => {
     viewer = new IIIFViewer(container, { manifest, persistCanvasTransform });
     const controller = mocks.osd;
@@ -90,6 +109,7 @@ describe('IIIF viewer', () => {
   it('renders a manifest, navigates canvases, changes language and cleans up', async () => {
     const onCanvasChange = vi.fn();
     viewer = new IIIFViewer(container, { manifest, showSidebar: true, onCanvasChange });
+    expect(container.querySelector('[data-action="copy-permalink"]')).toBeNull();
     expect(container.querySelector('[data-inspect="ruler"]')).toBeNull();
     expect(container.querySelector('[data-inspect="curtain"]')).toBeNull();
     expect(container.querySelector('[data-action="toggle-json-inspector"]')).toBeNull();

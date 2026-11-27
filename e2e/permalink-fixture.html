@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Permalink test</title></head>
+  <body>
+    <div id="viewer"></div>
+    <script type="module">
+      import { IIIFViewer } from '/src/index.js';
+      window.viewer = new IIIFViewer('#viewer', {
+        manifestUrl: 'https://iiif.vam.ac.uk/collections/O24955/manifest.json',
+        permalink: true,
+        showSidebar: false,
+      });
+    </script>
+  </body>
+</html>

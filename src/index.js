@@ -15,6 +15,7 @@ import { renderShell } from './template.js';
 import { InspectionTools } from './inspection-tools.js';
 import { ImageDownload, configureImageDownload } from './image-download.js';
 import { JsonInspector } from './json-inspector.js';
+import { configurePermalink, parsePermalink, serializePermalink } from './permalink.js';
 
 function extractDroppedManifestUrl(dataTransfer) {
   if (!dataTransfer) return null;
@@ -76,6 +77,7 @@ export class IIIFViewer {
       measurement: options.measurement ?? false,
       inspector: options.inspector ?? false,
       persistCanvasTransform: options.persistCanvasTransform ?? false,
+      permalink: configurePermalink(options.permalink),
       imageDownload: configureImageDownload(options.imageDownload),
       externalViewers: configureExternalViewers(options.externalViewers),
       height: options.height || '680px',
@@ -114,7 +116,16 @@ export class IIIFViewer {
 
     this.mount();
 
-    if (this.options.manifest) {
+    let restored = null;
+    try {
+      if (this.options.permalink) restored = parsePermalink(window.location.href, this.options.permalink.prefix);
+    } catch (error) {
+      this.setError(`Invalid permalink: ${error.message}`);
+      return;
+    }
+    if (restored) {
+      this.loadManifest(restored.manifest, { permalinkState: restored });
+    } else if (this.options.manifest) {
       this.setManifest(this.options.manifest);
     } else if (this.options.manifestUrl) {
       this.loadManifest(this.options.manifestUrl);
@@ -143,6 +154,7 @@ export class IIIFViewer {
       currentUrl: this.state.currentUrl,
       height: this.options.height,
       inspector: this.options.inspector,
+      permalink: Boolean(this.options.permalink),
     });
 
     this.container.innerHTML = '';
@@ -254,6 +266,7 @@ export class IIIFViewer {
       if (!actionEl) return;
 
       const action = actionEl.dataset.action;
+      if (action === 'copy-permalink') this.copyPermalink();
       if (action === 'toggle-json-inspector') this.jsonInspector?.toggle();
       if (action === 'toggle-theme') this.toggleTheme();
       if (action === 'toggle-sidebar') this.toggleSidebar();
@@ -454,7 +467,33 @@ export class IIIFViewer {
     this.renderSidebar();
   }
 
-  async loadManifest(url) {
+  getPermalink() {
+    if (!this.options.permalink) throw new Error('Permalinks are not enabled for this viewer.');
+    const canvas = this.state.manifest?.canvases[this.state.canvasIndex];
+    if (!canvas) throw new Error('Load a manifest before sharing.');
+    if (canvas.kind !== 'canvas') throw new Error('Sharing a 3D scene view is not supported.');
+    if (!this.manifestSourceUrl) throw new Error('This manifest was not loaded from a shareable URL.');
+    const { rotation, flipHorizontal, flipVertical } = this.osdController.transform;
+    if (![0, 90, 180, 270].includes(rotation)) throw new Error('Only right-angle rotations can be shared.');
+    return serializePermalink(window.location.href, this.options.permalink.prefix, {
+      manifest: this.manifestSourceUrl, canvas: this.state.canvasIndex,
+      xywh: this.osdController.getViewRegion(), language: this.state.language, rotation,
+      flip: flipHorizontal ? (flipVertical ? 'hv' : 'h') : (flipVertical ? 'v' : 'none'),
+    });
+  }
+
+  async copyPermalink() {
+    const status = this.wrapper.querySelector('[data-el="permalink-status"]');
+    try {
+      const link = this.getPermalink();
+      await navigator.clipboard.writeText(link);
+      status.textContent = 'Link copied.';
+    } catch (error) {
+      status.textContent = `Could not copy link: ${error.message}`;
+    }
+  }
+
+  async loadManifest(url, { permalinkState = null } = {}) {
     this.state.currentUrl = url;
     const input = this.wrapper.querySelector('[data-el="url-input"]');
     if (input) input.value = url;
@@ -480,7 +519,7 @@ export class IIIFViewer {
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const json = await res.json();
       if (controller.signal.aborted) return;
-      this.setManifest(json);
+      this.setManifest(json, { sourceUrl: url, permalinkState });
     } catch (err) {
       if (err.name === 'AbortError') return;
       const isCorsOrNetwork =
@@ -497,34 +536,51 @@ export class IIIFViewer {
     }
   }
 
-  async setManifest(jsonOrString) {
+  async setManifest(jsonOrString, { sourceUrl = null, permalinkState = null } = {}) {
     try {
+      if (sourceUrl === null) this.fetchAbortController?.abort();
       const raw = typeof jsonOrString === 'string' ? JSON.parse(jsonOrString) : jsonOrString;
-      const parsed = parseIIIFManifest(raw, this.state.language);
+      const language = permalinkState?.language || this.state.language;
+      const parsed = parseIIIFManifest(raw, language);
       if (!parsed.canvases.length) {
         throw new Error('Manifest contains no displayable canvases or 3D scenes.');
+      }
+      if (permalinkState && (permalinkState.canvas >= parsed.canvases.length ||
+          (permalinkState.xywh && parsed.canvases[permalinkState.canvas].kind !== 'canvas'))) {
+        throw new Error('The permalink canvas or region is not available in this manifest.');
       }
 
       this.destroyNavMap();
       this.osdController.resetTransform();
+      if (permalinkState) {
+        Object.assign(this.osdController.transform, {
+          rotation: permalinkState.rotation,
+          flipHorizontal: permalinkState.flip.includes('h'),
+          flipVertical: permalinkState.flip.includes('v'),
+        });
+        this.osdController.applyTransform();
+      }
       this.syncTransformUI();
       this.transformCanvas = null;
+      this.manifestSourceUrl = sourceUrl;
+      this.state.language = language;
       this.state.rawManifest = raw;
       this.state.manifest = parsed;
       this.jsonInspector?.setManifest(raw, parsed);
       this.inspectionTools?.resetManifest();
-      this.state.canvasIndex = Math.min(this.options.initialCanvas, parsed.canvases.length - 1);
+      this.state.canvasIndex = permalinkState ? permalinkState.canvas : Math.min(this.options.initialCanvas, parsed.canvases.length - 1);
       this.setError(null);
       this.sidebar.resetSearch();
       this.searchController.setManifest(raw);
 
       if (
-        parsed.availableLanguages.length > 0 &&
+        !permalinkState?.language && parsed.availableLanguages.length > 0 &&
         !parsed.availableLanguages.includes(this.state.language)
       ) {
         this.state.language = parsed.availableLanguages[0];
         this.sidebar.selectedLang = this.state.language;
       }
+      this.sidebar.selectedLang = this.state.language;
 
       this.wrapper.querySelector('[data-el="empty-state"]')?.classList.add('hidden');
 
@@ -539,7 +595,7 @@ export class IIIFViewer {
 
       this.options.onManifestLoad?.(parsed, raw);
       this.filmstrip.render(parsed.canvases, (u, t) => this.resolveUrl(u, t));
-      this.goToCanvas(this.state.canvasIndex);
+      this.goToCanvas(this.state.canvasIndex, { exactRegion: permalinkState?.xywh });
 
       if (parsed.navPlaceRefUrl && !parsed.navPlaceLoaded) {
         await this.loadExternalNavPlace(parsed.navPlaceRefUrl, {
@@ -619,7 +675,7 @@ export class IIIFViewer {
     this.activeNavMap = null;
   }
 
-  async goToCanvas(index, { focusRegion } = {}) {
+  async goToCanvas(index, { focusRegion, exactRegion } = {}) {
     const manifest = this.state.manifest;
     if (!manifest || index < 0 || index >= manifest.canvases.length) return;
 
@@ -666,7 +722,9 @@ export class IIIFViewer {
           : null;
 
       if (tileSource) {
-        if (Array.isArray(focusRegion) && focusRegion.length === 4) {
+        if (Array.isArray(exactRegion) && exactRegion.length === 4) {
+          this.osdController.open(tileSource, item.annotations, { xywh: exactRegion, exactView: true });
+        } else if (Array.isArray(focusRegion) && focusRegion.length === 4) {
           this.osdController.open(tileSource, item.annotations, { xywh: focusRegion });
         } else {
           this.osdController.open(tileSource, item.annotations);

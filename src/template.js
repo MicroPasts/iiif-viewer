@@ -2,7 +2,7 @@ import { escapeHtml } from './sanitize.js';
 
 let nextViewerId = 0;
 
-export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl, height, inspector = false }) {
+export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl, height, inspector = false, permalink = false }) {
   const id = `iiif-viewer-${++nextViewerId}`;
   const urlBar = showUrlInput
     ? `
@@ -53,6 +53,7 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
           <div data-el="download-button" class="iiif-inspection-buttons" hidden></div>
 
           ${inspector ? `<button type="button" data-action="toggle-json-inspector" aria-expanded="false" aria-controls="${id}-json-inspector" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 aria-expanded:bg-purple-600 aria-expanded:text-white transition">Inspector</button>` : ''}
+          ${permalink ? `<button type="button" data-action="copy-permalink" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">Copy link to current view</button>` : ''}
 
           <button type="button" data-action="toggle-sidebar" title="Toggle Info Panel (I)" aria-expanded="false" aria-controls="${id}-sidebar" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 aria-expanded:bg-purple-600 aria-expanded:hover:bg-purple-700 aria-expanded:border-purple-600 aria-expanded:text-white transition">
             Info
@@ -80,6 +81,7 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
 
       <!-- Main Workspace -->
       <div class="relative flex-1 min-h-0 flex overflow-hidden">
+        ${permalink ? `<div data-el="permalink-status" role="status" class="iiif-permalink-status"></div>` : ''}
         <!-- Deep Zoom 2D & 3D Viewport -->
         <div class="relative flex-1 min-w-0 bg-slate-100 dark:bg-slate-950 flex flex-col">
           <div data-el="osd-container" class="w-full h-full"></div>
