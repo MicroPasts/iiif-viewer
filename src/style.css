@@ -53,6 +53,23 @@
   border-radius: 9999px;
 }
 
+.iiif-permalink-status {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 45;
+  max-width: min(25rem, 90%);
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #94a3b8;
+  border-radius: 0.3rem;
+  background: #fff;
+  color: #1e293b;
+  font-size: 0.75rem;
+  pointer-events: none;
+}
+.iiif-permalink-status:empty { display: none; }
+.dark .iiif-permalink-status { background: #0f172a; color: #f1f5f9; }
+
 .iiif-json-inspector {
   position: absolute;
   inset: 0 0 0 auto;

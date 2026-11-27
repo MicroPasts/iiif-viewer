@@ -135,6 +135,11 @@ export class OsdController {
 
     const [x, y, w, h] = anno.xywh;
     const rect = tiledImage.imageToViewportRectangle(x, y, w, h);
+    if (anno.exactView) {
+      this.syncViewportSize();
+      this.osd.viewport.fitBounds(rect.rotate(-this.osd.viewport.getRotation()), true);
+      return;
+    }
     // Add slight breathing room around the target region
     const padded = new OpenSeadragon.Rect(
       rect.x - rect.width * 0.25,
@@ -147,6 +152,28 @@ export class OsdController {
     this.overlays.forEach(({ element, anno: item }) => {
       element.classList.toggle('is-active', item === anno);
     });
+  }
+
+  getViewRegion() {
+    if (this.awaitingImage) throw new Error('Wait for the image to finish loading before sharing.');
+    const item = this.osd.world.getItemAt(0);
+    if (!item) throw new Error('No image is available to share.');
+    this.syncViewportSize();
+    const rect = item.viewportToImageRectangle(this.osd.viewport.getBoundsNoRotate(true), true);
+    const region = [rect.x, rect.y, rect.width, rect.height];
+    if (region.some((value) => !Number.isFinite(value)) || rect.width <= 0 || rect.height <= 0) {
+      throw new Error('The current image region cannot be shared.');
+    }
+    return region;
+  }
+
+  syncViewportSize() {
+    const viewport = this.osd.viewport;
+    const size = viewport.getContainerSize();
+    if (this.element.clientWidth > 0 && this.element.clientHeight > 0 &&
+        (size.x !== this.element.clientWidth || size.y !== this.element.clientHeight)) {
+      viewport.resize();
+    }
   }
 
   setAnnotationsVisible(visible) {

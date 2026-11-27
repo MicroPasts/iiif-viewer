@@ -323,6 +323,7 @@ onBeforeUnmount(() => viewer?.destroy());
 | `layersCurtain` | `boolean` | `false` | Enable the image-layer curtain and comparison canvas controls for 2D images. |
 | `measurement` | `boolean` | `false` | Enable point-to-point, polyline and area measurement for 2D images. |
 | `persistCanvasTransform` | `boolean` | `false` | Keep 2D rotation and horizontal/vertical flips when navigating within a manifest. |
+| `permalink` | `boolean \| object` | `false` | Enable copyable view links and URL restoration; use `{ prefix: 'name' }` to isolate multiple viewers. |
 | `inspector` | `boolean` | `false` | Enable the IIIF JSON inspector drawer for manifests and the current canvas or scene. |
 | `imageDownload` | `boolean \| object` | `false` | Enable full-canvas image downloads; optionally configure sizes, limits and full-resolution access. |
 | `height` | `string` | `'680px'` | CSS height of the viewer container when not in fullscreen; the viewer has a 540px minimum height. |
@@ -361,6 +362,14 @@ const viewer = new IIIFViewer('#viewer', {
 ### Persistent canvas orientation
 
 The rotate button turns the 2D image by 90 degrees; horizontal and vertical image-axis flips are available in **Filters**. By default, rotation and flips reset when navigating to a different canvas or 3D scene. Set `persistCanvasTransform: true` to carry them between canvases in the same manifest, including when passing through a 3D scene. Loading a new manifest always resets the orientation. The setting does not affect 3D camera orientation, zoom, pan or filters. The Reset view button resets zoom and pan, not orientation.
+
+### Share a view
+
+Set `permalink: true` to show **Copy link to current view** and restore supported links when the viewer initializes. The main demo viewer has this enabled. `viewer.getPermalink()` also returns the link or throws an error when the view cannot be shared. Copying requires clipboard permission and a secure browser context.
+
+Links retain unrelated page parameters and the hash, and add `iiif-manifest`, `iiif-canvas` (zero-based), `iiif-xywh`, `iiif-lang`, `iiif-rotation` and `iiif-flip`. `xywh` is the unrotated viewport rectangle in source-image pixels, including any space outside the image. Rotation and image-axis flips are included so the region can be restored in the same orientation. A different viewport aspect ratio may show additional image area. Links require a manifest loaded from an HTTP(S) URL; in-memory manifests and 3D views cannot be shared. A link reloads the manifest through the recipient's normal proxy and fetch configuration. The URL and its query parameters are exposed to recipients, so do not share links containing private or credential-bearing URLs.
+
+Only opted-in viewers consume these parameters. For multiple viewers use a distinct prefix, for example `permalink: { prefix: 'book' }`, which uses `book-manifest`, `book-canvas`, and so on. Invalid or unavailable link state is reported in the viewer. This format is viewer-specific, not IIIF Content State.
 
 ### Inspect IIIF JSON
 
@@ -401,6 +410,7 @@ The separate full-resolution download does not include layers, rotation, flips o
 | `goToCanvas` | `async goToCanvas(index)` | Navigates to the specified zero-based canvas or 3D scene index. |
 | `setProxyRoutes` | `setProxyRoutes(routes)` | Updates `proxyRoutes` at runtime and reloads the active canvas/scene. |
 | `setInspectionTools` | `setInspectionTools({ physicalRuler, layersCurtain, measurement })` | Enables or disables 2D inspection tools at runtime; omitted options retain their current values. Changing the options resets manual calibration, measurements and layer controls. |
+| `getPermalink` | `getPermalink()` | Returns a shareable URL for the loaded 2D image view when `permalink` is enabled; throws if the view cannot be shared. |
 | `resolveUrl` | `resolveUrl(url, resourceType)` | Resolves a URL through configured `proxyRoutes`, `assetProxyUrl`, or `proxyUrl`. |
 | `setTheme` | `setTheme('dark' \| 'light')` | Switches the viewer theme between dark and light mode. |
 | `setLanguage` | `setLanguage(language)` | Updates manifest, canvas, and range labels and metadata for the selected language. |
