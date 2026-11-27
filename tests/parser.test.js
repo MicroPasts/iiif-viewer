@@ -47,13 +47,26 @@ describe('IIIF parser', () => {
         images: [{ on: 'canvas', resource: {
           '@type': 'oa:Choice',
           default: { '@id': 'one.jpg', service: { '@id': 'https://example.test/one', profile: 'level2' } },
-          item: [{ '@id': 'two.jpg', service: { '@id': 'https://example.test/two', profile: 'level2' } }],
+          item: [{ '@id': 'two.jpg', service: { '@id': 'https://example.test/two', profile: 'level2', sizes: [{ width: 10, height: 10 }] } }],
         } }],
       }] }],
     });
     expect(parsed.canvases[0].image.infoJsonUrl).toBe('https://example.test/one/info.json');
     expect(parsed.canvases[0].layers.map((layer) => layer.infoJsonUrl))
       .toEqual(['https://example.test/one/info.json', 'https://example.test/two/info.json']);
+    expect(parsed.canvases[0].layers[1].serviceDetails.sizes).toEqual([{ width: 10, height: 10 }]);
+  });
+
+  it('preserves embedded image service metadata for base and choice layers', () => {
+    const body = (id, maxWidth) => ({ id: `${id}.jpg`, type: 'Image', service: [{
+      id, type: 'ImageService3', maxWidth, sizes: [{ width: 20, height: 10 }],
+    }] });
+    const parsed = parseIIIFManifest({ type: 'Manifest', items: [{ type: 'Canvas', id: 'canvas', width: 100, height: 50,
+      items: [{ items: [{ motivation: 'painting', target: 'canvas', body: { type: 'Choice', items: [
+        body('https://example.test/one', 80), body('https://example.test/two', 60),
+      ] } }] }] }] });
+    expect(parsed.canvases[0].image.serviceDetails).toMatchObject({ maxWidth: 80, sizes: [{ width: 20, height: 10 }] });
+    expect(parsed.canvases[0].layers[1].serviceDetails).toMatchObject({ maxWidth: 60 });
   });
 
   it('normalizes a Presentation 2 image service and embedded annotations', () => {

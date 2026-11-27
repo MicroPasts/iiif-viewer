@@ -61,12 +61,13 @@ function extractItemThumbnail(item) {
 function extractImageFromPaintingBody(rawBody, fallbackWidth = null, fallbackHeight = null) {
   let serviceUrl = null;
   let serviceProfile = null;
+  let serviceDetails = null;
   let staticUrl = null;
   let width = fallbackWidth;
   let height = fallbackHeight;
 
   if (!rawBody) {
-    return { serviceUrl, serviceProfile, staticUrl, width, height };
+    return { serviceUrl, serviceProfile, serviceDetails, staticUrl, width, height };
   }
 
   const body =
@@ -89,9 +90,10 @@ function extractImageFromPaintingBody(rawBody, fallbackWidth = null, fallbackHei
   if (imgService) {
     serviceUrl = (imgService.id || imgService['@id'] || '').replace(/\/$/, '');
     serviceProfile = imgService.type || imgService['@type'] || imgService.profile || null;
+    serviceDetails = imgService;
   }
 
-  return { serviceUrl, serviceProfile, staticUrl, width, height };
+  return { serviceUrl, serviceProfile, serviceDetails, staticUrl, width, height };
 }
 
 function normalizeSceneSource(scene) {
@@ -140,6 +142,7 @@ function normalizeSceneSource(scene) {
 function normalizeImageSource(canvas, isV3) {
   let serviceUrl = null;
   let serviceProfile = null;
+  let serviceDetails = null;
   let staticUrl = null;
   let width = canvas.width || null;
   let height = canvas.height || null;
@@ -155,7 +158,7 @@ function normalizeImageSource(canvas, isV3) {
       if (painting && painting.body) {
         let rawBody = Array.isArray(painting.body) ? painting.body[0] : painting.body;
         if (rawBody?.type === 'Choice') rawBody = rawBody.items?.[0];
-        ({ serviceUrl, serviceProfile, staticUrl, width, height } =
+        ({ serviceUrl, serviceProfile, serviceDetails, staticUrl, width, height } =
           extractImageFromPaintingBody(rawBody, width, height));
         break;
       }
@@ -180,6 +183,7 @@ function normalizeImageSource(canvas, isV3) {
       if (imgService) {
         serviceUrl = (imgService['@id'] || imgService.id || '').replace(/\/$/, '');
         serviceProfile = imgService.profile || imgService['@type'] || null;
+        serviceDetails = imgService;
       }
     }
   }
@@ -191,6 +195,7 @@ function normalizeImageSource(canvas, isV3) {
   return {
     serviceUrl,
     serviceProfile,
+    serviceDetails,
     infoJsonUrl: serviceUrl ? `${serviceUrl}/info.json` : null,
     staticUrl,
     thumbnail,
@@ -235,6 +240,7 @@ function normalizeCanvasLayers(canvas, isV3, preferredLang) {
           const service = Array.isArray(choice.service) ? choice.service[0] : choice.service;
           source.serviceUrl = (service?.id || service?.['@id'] || '').replace(/\/$/, '') || null;
           source.serviceProfile = service?.profile || service?.['@type'] || null;
+          source.serviceDetails = service || null;
         }
         if (!source.staticUrl && !source.serviceUrl) continue;
         layers.push({
@@ -271,7 +277,7 @@ function canvasesFromAnnotationPage(annoPage, preferredLang) {
 
   return paintingAnnos.map((anno, idx) => {
     const rawBody = Array.isArray(anno.body) ? anno.body[0] : anno.body;
-    const { serviceUrl, serviceProfile, staticUrl, width, height } =
+    const { serviceUrl, serviceProfile, serviceDetails, staticUrl, width, height } =
       extractImageFromPaintingBody(rawBody);
 
     const targetId =
@@ -297,6 +303,7 @@ function canvasesFromAnnotationPage(annoPage, preferredLang) {
       image: {
         serviceUrl,
         serviceProfile,
+        serviceDetails,
         infoJsonUrl: serviceUrl ? `${serviceUrl}/info.json` : null,
         staticUrl,
         thumbnail,

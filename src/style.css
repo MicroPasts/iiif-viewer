@@ -107,6 +107,11 @@
   line-height: 1.4;
   pointer-events: auto;
 }
+.iiif-download-panel { z-index: 16; }
+.iiif-download-panel[hidden] { display: none; }
+.iiif-download-rights { display: inline-block; margin-top: 0.4rem; color: #7e22ce; text-decoration: underline; }
+.dark .iiif-download-rights { color: #d8b4fe; }
+.iiif-download-rights[hidden] { display: none; }
 .dark .iiif-inspection-panel {
   --inspection-bg: rgba(15, 23, 42, 0.97);
   --inspection-surface: #1e293b;

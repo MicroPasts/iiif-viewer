@@ -13,6 +13,7 @@ import { Filmstrip } from './filmstrip.js';
 import { ManifestSearchController } from './search-controller.js';
 import { renderShell } from './template.js';
 import { InspectionTools } from './inspection-tools.js';
+import { ImageDownload, configureImageDownload } from './image-download.js';
 
 function extractDroppedManifestUrl(dataTransfer) {
   if (!dataTransfer) return null;
@@ -71,6 +72,7 @@ export class IIIFViewer {
       summaryCollapseLength: options.summaryCollapseLength ?? 300,
       physicalRuler: options.physicalRuler ?? false,
       layersCurtain: options.layersCurtain ?? false,
+      imageDownload: configureImageDownload(options.imageDownload),
       externalViewers: configureExternalViewers(options.externalViewers),
       height: options.height || '680px',
       initialCanvas: options.initialCanvas || 0,
@@ -154,6 +156,18 @@ export class IIIFViewer {
     );
 
     this.createInspectionTools();
+    if (this.options.imageDownload) {
+      this.imageDownload = new ImageDownload(this.wrapper, this.osdController, this.options.imageDownload, {
+        resolveUrl: (url, type) => this.resolveUrl(url, type),
+        getLayers: () => this.inspectionTools?.getVisibleLayers() ?? (this.inspectionTools?.curtainEnabled ? null : []),
+        getRights: () => this.state.manifest?.rights,
+        closeInspection: () => {
+          this.inspectionTools?.closePanels();
+          this.wrapper.querySelector('[data-el="filter-bar"]')?.classList.add('hidden');
+          this.wrapper.querySelector('[data-action="toggle-filters"]')?.setAttribute('aria-expanded', 'false');
+        },
+      });
+    }
 
     this.sidebar = new SidebarPanel(this.wrapper, {
       isOpen: this.options.showSidebar,
@@ -587,6 +601,7 @@ export class IIIFViewer {
     this.state.modelStats = null;
     const item = manifest.canvases[index];
     this.inspectionTools?.setCanvas(manifest, index);
+    this.imageDownload?.setCanvas(item);
 
     const osdEl = this.wrapper.querySelector('[data-el="osd-container"]');
     const sceneEl = this.wrapper.querySelector('[data-el="scene-container"]');
@@ -773,6 +788,7 @@ export class IIIFViewer {
     this.destroyNavMap();
     this.destroySceneViewer();
     this.inspectionTools?.destroy();
+    this.imageDownload?.destroy();
     this.osdController?.destroy();
     this.container.innerHTML = '';
   }

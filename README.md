@@ -122,7 +122,7 @@ The manifest and its resources must be accessible to the browser, including any 
 
 Drag-and-drop is enabled by default, independently of the URL bar. Disabling it only prevents manifest drops; image and model drag controls still work, and your application can still call `viewer.loadManifest(url)`. These options are not access controls. The preset buttons in the demo are part of the demo page, not the viewer; omit them from your page if they are not needed.
 
-For interactive examples, open [Configuration examples in the demo](https://micropasts.github.io/iiif-viewer/#configuration-examples). They show the URL bar hidden, manifest drops disabled, a combination with the sidebar initially closed, and external viewer links hidden. `showSidebar: false` does not remove the sidebar; the Info button can still open it. The examples use a [local copy of the supplied Caryatid manifest](./public/examples/caryatid-manifest.json); images are served by the British Museum and remain subject to the rights statement in the manifest.
+For interactive examples, open [Configuration examples in the demo](https://micropasts.github.io/iiif-viewer/#configuration-examples). They show the URL bar hidden, manifest drops disabled, a combination with the sidebar initially closed, external viewer links hidden, and image downloading enabled. `showSidebar: false` does not remove the sidebar; the Info button can still open it. The examples use a [local copy of the supplied Caryatid manifest](./public/examples/caryatid-manifest.json); images are served by the British Museum and remain subject to the rights statement in the manifest.
 
 ### Configure external viewer links
 
@@ -321,6 +321,7 @@ onBeforeUnmount(() => viewer?.destroy());
 | `summaryCollapseLength` | `number` | `300` | Plain-text summary length above which a Show more control appears; set to `0` or a negative number to disable collapsing. |
 | `physicalRuler` | `boolean` | `false` | Enable the physical scale and manual calibration controls for 2D images. |
 | `layersCurtain` | `boolean` | `false` | Enable the image-layer curtain and comparison canvas controls for 2D images. |
+| `imageDownload` | `boolean \| object` | `false` | Enable full-canvas image downloads; optionally configure sizes, limits and full-resolution access. |
 | `height` | `string` | `'680px'` | CSS height of the viewer container when not in fullscreen; the viewer has a 540px minimum height. |
 | `showUrlInput` | `boolean` | `true` | Shows or hides the manifest URL input bar in the top toolbar. |
 | `allowManifestDrop` | `boolean` | `true` | Allows manifest URLs or IIIF links to be dropped onto the viewer for loading. |
@@ -350,6 +351,28 @@ const viewer = new IIIFViewer('#viewer', {
 **Ruler:** Open Ruler to show a physical scale bar. The viewer reads the canvas `physicalDimensions` extension with the IIIF physical-dimensions profile, a positive `physicalScale` in units per canvas pixel, and `physicalUnits` of `mm`, `cm`, or `in`. The image and canvas must have proportional dimensions for this automatic calibration. Otherwise, enter millimetres per **source image pixel**, or select **Draw calibration line**, drag across a known distance within the image, enter its length in millimetres, and select **Calibrate from line**. Escape cancels drawing. Manual calibration is kept per canvas until a new manifest is loaded; **Use manifest scale** resets it. Measurements are only as accurate as the metadata or the supplied calibration, and assume uniform scale across the image.
 
 **Curtain:** Open Curtain to compare full-canvas painting images and IIIF `Choice` alternatives. Additional layers start hidden; select **Show** for the layer to compare. The slider reveals each visible layer from the left or top, according to the direction; layers can be hidden or moved up. A second canvas can also be selected as an overlay when both canvases declare identical dimensions. Source images must also have identical pixel dimensions. Only full-canvas images without selectors or transforms are supported; cropped or positioned painting regions are not compared. Image alignment is not automatic: matching dimensions do not guarantee that the subjects are registered. Layer settings reset when changing the comparison canvas or navigating between canvases. Image URLs use the normal image proxy routing and require appropriate CORS permissions.
+
+### Download an image
+
+The optional Download toolbar control exports a full-canvas PNG, including visible curtain layers, the current right-angle rotation and image filters. It does not include zoom, annotations, or the ruler. Set `imageDownload: true` to use the default width presets of 500, 1000 and 2000 pixels and a 16-million-pixel output limit, or configure them:
+
+```js
+new IIIFViewer('#viewer', {
+  manifestUrl: './examples/caryatid-manifest.json',
+  imageDownload: {
+    widths: [300, 600],
+    maxPixels: 4000000,
+    maxWidth: 2000,
+    maxHeight: 3000,
+    excludeSizes: [{ width: 533, height: 698 }],
+    allowOriginal: false,
+  },
+});
+```
+
+Sizes advertised in the manifest and image-service `info.json` are listed, along with supported width presets and a full-resolution composite. Sizes exceeding either source's service limits, the configured limits, or `maxPixels` are disabled with a reason. `maxWidth` and `maxHeight` are optional positive integer bounds; `excludeSizes` excludes exact unrotated output dimensions. `allowOriginal` defaults to `true`; setting it to `false` hides both full-resolution choices, including the composite. Width presets are offered only for services advertising width resizing. All visible comparison layers must support the selected size; incompatibilities are reported on export.
+
+The separate full-resolution download does not include layers, rotation or filters. For a static image it downloads the manifest image file; for an IIIF service it requests the full-resolution JPEG, which is a service derivative and not necessarily the archival original. Both are subject to `maxWidth`, `maxHeight`, `excludeSizes` and service limits, but not `maxPixels` (which limits canvas exports). The true original file is not generally exposed by an IIIF image service. Composite exports of partial-canvas painting images and 3D scenes are not supported. Requests use image proxy routing; the image service and all selected layers must allow browser CORS access. Errors are shown in the panel. Exporting does not grant permission to reuse an image: consult the provider's rights and terms.
 
 ---
 

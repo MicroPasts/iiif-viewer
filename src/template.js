@@ -50,6 +50,7 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
           </div>
 
           <div data-el="inspection-buttons" class="iiif-inspection-buttons" role="group" aria-label="Image inspection tools" hidden></div>
+          <div data-el="download-button" class="iiif-inspection-buttons" hidden></div>
 
           <button type="button" data-action="toggle-sidebar" title="Toggle Info Panel (I)" aria-expanded="false" aria-controls="${id}-sidebar" class="px-2.5 py-1 text-xs font-medium rounded bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 aria-expanded:bg-purple-600 aria-expanded:hover:bg-purple-700 aria-expanded:border-purple-600 aria-expanded:text-white transition">
             Info
@@ -82,6 +83,7 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
           <div data-el="osd-container" class="w-full h-full"></div>
           <div data-el="scene-container" class="hidden w-full h-full overflow-hidden"></div>
           <div id="${id}-inspection" data-el="inspection-tools" class="iiif-inspection-tools" hidden></div>
+          <section id="${id}-download" data-el="download-panel" class="iiif-inspection-panel iiif-download-panel" aria-label="Download image" hidden></section>
 
           <!-- 2D Image Filters Bar -->
           <div id="${id}-filters" data-el="filter-bar" class="hidden absolute top-3 right-3 z-20 p-3 rounded-lg bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-700 shadow-lg backdrop-blur-xs text-xs space-y-2.5 w-60">

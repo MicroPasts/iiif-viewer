@@ -18,6 +18,7 @@ export class InspectionTools {
     this.resolveUrl = resolveUrl;
     this.generation = 0;
     this.layers = [];
+    this.layersReady = false;
     this.calibrations = new Map();
     this.visible = false;
     this.drawing = false;
@@ -89,6 +90,7 @@ export class InspectionTools {
     this.generation += 1;
     this.cancelDrawing();
     this.removeLayers();
+    this.layersReady = false;
     this.manifest = manifest;
     this.canvas = manifest?.canvases[index];
     this.base = null;
@@ -141,6 +143,7 @@ export class InspectionTools {
   loadLayers() {
     const generation = ++this.generation;
     this.removeLayers();
+    this.layersReady = false;
     const baseSource = this.canvas.image.infoJsonUrl || this.canvas.image.staticUrl;
     const candidates = (this.canvas.imageCoversCanvas ? this.canvas.layers || [] : []).filter((layer) =>
       (layer.infoJsonUrl || layer.staticUrl) !== baseSource);
@@ -155,6 +158,7 @@ export class InspectionTools {
     const next = (index) => {
       if (generation !== this.generation) return;
       if (index >= candidates.length) {
+        this.layersReady = errors.length === 0;
         status.textContent = errors.length ? errors.join(' ') :
           candidates.length ? '' : 'No additional full-canvas images available.';
         this.renderLayers();
@@ -183,7 +187,7 @@ export class InspectionTools {
           item.setWidth(bounds.width, true);
           item.setOpacity(0);
           this.layers.push({ item, label: candidate.comparisonCanvas?.label || candidate.label,
-            rawLabel: candidate.rawLabel, comparisonCanvas: candidate.comparisonCanvas, clip: 1, visible: false });
+            image: candidate, rawLabel: candidate.rawLabel, comparisonCanvas: candidate.comparisonCanvas, clip: 1, visible: false });
           next(index + 1);
         },
         error: () => {
@@ -383,6 +387,21 @@ export class InspectionTools {
 
   resetManifest() {
     this.calibrations.clear();
+  }
+
+  getVisibleLayers() {
+    if (!this.curtainEnabled) return [];
+    if (!this.layersReady) return null;
+    const horizontal = this.host.querySelector('[data-inspect="orientation"]').value === 'horizontal';
+    return this.layers.filter((layer) => layer.visible).map((layer) => ({
+      image: layer.image, clip: layer.clip, horizontal,
+    }));
+  }
+
+  closePanels() {
+    for (const panel of this.host.querySelectorAll('[data-inspect-panel]')) panel.hidden = true;
+    for (const button of this.toolbar.querySelectorAll('[data-inspect]')) button.setAttribute('aria-expanded', 'false');
+    this.cancelDrawing();
   }
 
   setLanguage(language) {
