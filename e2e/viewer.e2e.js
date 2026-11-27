@@ -99,6 +99,39 @@ test('demonstrates independent viewer configuration options', async ({ page }) =
   await minimal.getByRole('button', { name: 'Info', exact: true }).click();
   await expect(minimal.locator('[data-el="sidebar"]')).toBeVisible();
 
+  const resizable = page.locator('#example-resizable-sidebar');
+  await expect(resizable.locator('[data-el="viewer-root"]')).toHaveCount(0);
+  await page.getByText('Resize the information panel', { exact: true }).click();
+  await expect(resizable.locator('[data-el="manifest-title"]')).toHaveText('Caryatid (1816,0610.128)');
+  const separator = resizable.getByRole('separator', { name: 'Information panel width' });
+  await expect(separator).toBeVisible();
+  const sidebar = resizable.locator('[data-el="sidebar"]');
+  const originalWidth = (await sidebar.boundingBox()).width;
+  const handle = await separator.boundingBox();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(handle.x - 50, handle.y + 100, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => (await sidebar.boundingBox()).width).toBeGreaterThan(originalWidth + 40);
+  await resizable.getByText('Panel width', { exact: true }).click();
+  await resizable.getByRole('button', { name: 'Reset information panel width' }).click();
+  await expect.poll(async () => (await sidebar.boundingBox()).width).toBe(originalWidth);
+
+  const selectedTabs = page.locator('#example-sidebar-tabs');
+  await expect(selectedTabs.locator('[data-el="viewer-root"]')).toHaveCount(0);
+  await page.getByText('Choose information tabs', { exact: true }).click();
+  await expect(selectedTabs.locator('[data-el="manifest-title"]')).toHaveText('Caryatid (1816,0610.128)');
+  await expect(selectedTabs.getByRole('tab')).toHaveText(['Metadata', 'Search']);
+  const metadataTab = selectedTabs.getByRole('tab', { name: 'Metadata' });
+  const searchTab = selectedTabs.getByRole('tab', { name: 'Search' });
+  await metadataTab.focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(searchTab).toBeFocused();
+  await expect(searchTab).toHaveAttribute('aria-selected', 'true');
+  await expect(selectedTabs.locator('[data-el="manifest-search-form"]')).toBeVisible();
+  await page.keyboard.press('Home');
+  await expect(metadataTab).toBeFocused();
+
   const noExternal = page.locator('#example-no-external-viewers');
   await expect(noExternal.locator('[data-el="viewer-root"]')).toHaveCount(0);
   await page.getByText('Hide external viewer links', { exact: true }).click();

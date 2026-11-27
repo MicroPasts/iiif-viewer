@@ -126,7 +126,7 @@ The manifest and its resources must be accessible to the browser, including any 
 
 Drag-and-drop is enabled by default, independently of the URL bar. Disabling it only prevents manifest drops; image and model drag controls still work, and your application can still call `viewer.loadManifest(url)`. These options are not access controls. The preset buttons in the demo are part of the demo page, not the viewer; omit them from your page if they are not needed.
 
-For interactive examples, open [Configuration examples in the demo](https://micropasts.github.io/iiif-viewer/#configuration-examples). They show the URL bar hidden, manifest drops disabled, a combination with the sidebar initially closed, external viewer links hidden, and image downloading enabled. `showSidebar: false` does not remove the sidebar; the Info button can still open it. The examples use a [local copy of the supplied Caryatid manifest](./public/examples/caryatid-manifest.json); images are served by the British Museum and remain subject to the rights statement in the manifest.
+For interactive examples, open [Configuration examples in the demo](https://micropasts.github.io/iiif-viewer/#configuration-examples). They include selected information tabs, a resizable information panel, a hidden URL bar, disabled manifest drops, a sidebar initially closed, hidden external viewer links, and image downloading. `showSidebar: false` does not remove the sidebar; the Info button can still open it. Most examples use a [local copy of the supplied Caryatid manifest](./public/examples/caryatid-manifest.json); images are served by the British Museum and remain subject to the rights statement in the manifest.
 
 ### Configure external viewer links
 
@@ -334,6 +334,8 @@ onBeforeUnmount(() => viewer?.destroy());
 | `showUrlInput` | `boolean` | `true` | Shows or hides the manifest URL input bar in the top toolbar. |
 | `allowManifestDrop` | `boolean` | `true` | Allows manifest URLs or IIIF links to be dropped onto the viewer for loading. |
 | `showSidebar` | `boolean` | `true` at widths ≥ 768px; otherwise `false` | Initial visibility of the Metadata / Index / Notes / Search / Map sidebar. |
+| `resizableSidebar` | `boolean` | `false` | Enable desktop information-panel resizing; the mobile overlay remains unchanged. |
+| `sidebarTabs` | `string[]` | All five tabs | Select one or more Info tabs using `metadata`, `structures` (Index), `annotations` (Notes), `search`, and `map`. Tabs retain their standard order; the first enabled tab is selected initially. |
 | `externalViewers` | `false \| object` | Universal Viewer and Tify | Hide, append to, or replace links in the Metadata tab. See [Configure external viewer links](#configure-external-viewer-links). |
 | `initialCanvas` | `number` | `0` | Zero-based index of the initial canvas or 3D scene to display. |
 | `fetchOptions` | `RequestInit` | `{}` | Optional manifest and search `fetch` options (such as `credentials` or custom `headers`); the viewer supplies its own abort signal. |
@@ -343,6 +345,8 @@ onBeforeUnmount(() => viewer?.destroy());
 | `onSelectLocation` | `function` | `null` | Called as `(feature, { canvasIndex })` when a location is selected from the map or list. The index can be absent or `null` for a manifest-level location. Map clicks provide a MapLibre feature; list selections provide a normalized GeoJSON feature. |
 
 `onSelectScene` receives the container element, normalized scene data (`modelUrl`, `format`, `transforms`, and `thumbnail`), and `{ theme, title }`. The `modelUrl` is already resolved through proxy routing. The returned instance may implement `destroy()`, `setTheme(theme)`, and `handleResize()`; the viewer calls these when available.
+
+For example, `sidebarTabs: ['metadata', 'search']` displays only Metadata and Search. The array must contain at least one valid, unique tab ID. If Notes is omitted, clicking an annotation still focuses it but does not open the Notes panel. Hiding tabs is a presentation choice, not an access control; it does not remove manifest data or annotation overlays.
 
 ### Physical ruler, measurement and image curtain
 
@@ -432,6 +436,8 @@ The separate full-resolution download does not include layers, rotation, flips o
 When the viewer container itself has keyboard focus, use the left/right arrows to change canvas, `I` to toggle the sidebar, and `F` to toggle fullscreen. For 2D images, `+` or `=` zooms in, `-` zooms out, and `0` resets the view. Escape exits the fullscreen fallback. These shortcuts do not override keyboard interaction with controls inside the viewer.
 
 Use the arrow keys to navigate the sidebar tabs (Home and End select the first and last tab). With the 2D image focused, arrow keys pan and `+`/`-` zoom; the Filters panel also has pan buttons. With the 3D model focused, arrow keys pan, Shift plus arrow keys rotate, and `+`/`-` zoom. The 3D **Move view** menu provides buttons for these actions without dragging. The map has pan buttons, and locations can be selected from the list beneath it.
+
+Set `resizableSidebar: true` to resize the desktop information panel using its left-hand divider. Drag it or use Left/Right arrows when it has focus; Home and End select the minimum and maximum widths. Open **Panel width** at the bottom of the panel for narrower, wider, and reset buttons. The width is retained when the panel is closed and reopened, for the lifetime of the viewer, and is constrained to leave room for the image. On narrow screens the panel remains an overlay.
 
 In narrow 3D viewer areas, the controls are collapsed behind **3D controls** to leave more room for the model. Open the button to use the controls, and close it again or press Escape to return focus to the button.
 

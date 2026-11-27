@@ -22,6 +22,7 @@
       const modelUrl = `data:application/json;base64,${btoa(JSON.stringify(model))}`;
       window.viewer = new IIIFViewer('#viewer', {
         showSidebar: true,
+        resizableSidebar: new URLSearchParams(location.search).has('resizableSidebar'),
         manifest: {
           type: 'Manifest',
           id: 'https://example.test/manifest',

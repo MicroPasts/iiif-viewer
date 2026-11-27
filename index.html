@@ -129,6 +129,32 @@
         </details>
 
         <details class="rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900 p-4">
+          <summary class="cursor-pointer font-semibold">Resize the information panel</summary>
+          <div class="space-y-3 pt-3">
+            <p class="text-sm">On desktop, drag the divider at the left of the Info panel to change its width. You can also use its keyboard controls or open Panel width at the bottom for narrower, wider and reset buttons. On narrow screens the panel remains an overlay.</p>
+            <pre class="overflow-auto rounded bg-slate-900 p-3 text-xs text-white"><code>new IIIFViewer('#example-resizable-sidebar', {
+  manifestUrl: './examples/caryatid-manifest.json',
+  showSidebar: true,
+  resizableSidebar: true,
+});</code></pre>
+            <div id="example-resizable-sidebar"></div>
+          </div>
+        </details>
+
+        <details class="rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900 p-4">
+          <summary class="cursor-pointer font-semibold">Choose information tabs</summary>
+          <div class="space-y-3 pt-3">
+            <p class="text-sm">Show only the information sections your audience needs. This example keeps Metadata and Search; the other tabs are omitted.</p>
+            <pre class="overflow-auto rounded bg-slate-900 p-3 text-xs text-white"><code>new IIIFViewer('#example-sidebar-tabs', {
+  manifestUrl: './examples/caryatid-manifest.json',
+  showSidebar: true,
+  sidebarTabs: ['metadata', 'search'],
+});</code></pre>
+            <div id="example-sidebar-tabs"></div>
+          </div>
+        </details>
+
+        <details class="rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900 p-4">
           <summary class="cursor-pointer font-semibold">Hide external viewer links</summary>
           <div class="space-y-3 pt-3">
             <p class="text-sm">The Metadata tab remains available without links to external IIIF tools.</p>
@@ -273,6 +299,8 @@
           allowManifestDrop: false,
           showSidebar: false,
         },
+        'example-resizable-sidebar': { showSidebar: true, resizableSidebar: true },
+        'example-sidebar-tabs': { showSidebar: true, sidebarTabs: ['metadata', 'search'] },
         'example-no-external-viewers': { externalViewers: false },
         'example-orientation': { manifestUrl: 'https://iiif.library.ucla.edu/ark%3A%2F21198%2Fn16c9s/manifest', showUrlInput: false, showSidebar: false, persistCanvasTransform: true },
         'example-inspector': { showUrlInput: false, showSidebar: false, inspector: true },

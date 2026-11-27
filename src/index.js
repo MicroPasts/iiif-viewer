@@ -16,6 +16,8 @@ import { InspectionTools } from './inspection-tools.js';
 import { ImageDownload, configureImageDownload } from './image-download.js';
 import { JsonInspector } from './json-inspector.js';
 import { configurePermalink, parsePermalink, serializePermalink } from './permalink.js';
+import { SidebarResizer } from './sidebar-resizer.js';
+import { configureSidebarTabs } from './sidebar-tabs.js';
 
 function extractDroppedManifestUrl(dataTransfer) {
   if (!dataTransfer) return null;
@@ -71,6 +73,8 @@ export class IIIFViewer {
       showUrlInput: options.showUrlInput ?? true,
       allowManifestDrop: options.allowManifestDrop ?? true,
       showSidebar: options.showSidebar ?? defaultSidebarOpen,
+      resizableSidebar: options.resizableSidebar ?? false,
+      sidebarTabs: configureSidebarTabs(options.sidebarTabs),
       summaryCollapseLength: options.summaryCollapseLength ?? 300,
       physicalRuler: options.physicalRuler ?? false,
       layersCurtain: options.layersCurtain ?? false,
@@ -155,6 +159,8 @@ export class IIIFViewer {
       height: this.options.height,
       inspector: this.options.inspector,
       permalink: Boolean(this.options.permalink),
+      resizableSidebar: this.options.resizableSidebar,
+      sidebarTabs: this.options.sidebarTabs,
     });
 
     this.container.innerHTML = '';
@@ -166,6 +172,7 @@ export class IIIFViewer {
       {
         onTransformChange: () => this.syncTransformUI(),
         onAnnotationClick: () => {
+          if (!this.sidebar.availableTabs.includes('annotations')) return;
           this.sidebar.setOpen(true);
           this.sidebar.setTab('annotations');
           this.renderSidebar();
@@ -220,6 +227,10 @@ export class IIIFViewer {
         this.options.onSelectLocation?.(feat, { canvasIndex: cIdx });
       },
     });
+
+    if (this.options.resizableSidebar) {
+      this.sidebarResizer = new SidebarResizer(this.wrapper, () => this.handleViewportResize());
+    }
 
     this.filmstrip = new Filmstrip(this.wrapper, {
       onSelectCanvas: (idx) => this.goToCanvas(idx),
@@ -884,6 +895,7 @@ export class IIIFViewer {
     this.inspectionTools?.destroy();
     this.jsonInspector?.destroy();
     this.imageDownload?.destroy();
+    this.sidebarResizer?.destroy();
     this.osdController?.destroy();
     this.container.innerHTML = '';
   }

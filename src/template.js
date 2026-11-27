@@ -1,8 +1,9 @@
 import { escapeHtml } from './sanitize.js';
+import { SIDEBAR_TABS } from './sidebar-tabs.js';
 
 let nextViewerId = 0;
 
-export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl, height, inspector = false, permalink = false }) {
+export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl, height, inspector = false, permalink = false, resizableSidebar = false, sidebarTabs = SIDEBAR_TABS.map(({ id }) => id) }) {
   const id = `iiif-viewer-${++nextViewerId}`;
   const urlBar = showUrlInput
     ? `
@@ -80,7 +81,7 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
       </div>
 
       <!-- Main Workspace -->
-      <div class="relative flex-1 min-h-0 flex overflow-hidden">
+      <div data-el="workspace" class="relative flex-1 min-h-0 flex overflow-hidden">
         ${permalink ? `<div data-el="permalink-status" role="status" class="iiif-permalink-status"></div>` : ''}
         <!-- Deep Zoom 2D & 3D Viewport -->
         <div class="relative flex-1 min-w-0 bg-slate-100 dark:bg-slate-950 flex flex-col">
@@ -153,18 +154,23 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
         </div>
 
         <!-- Right Metadata / Index / Notes / Search / Map Sidebar -->
-        <aside id="${id}-sidebar" data-el="sidebar" aria-label="Viewer information" class="absolute inset-y-0 right-0 z-30 w-80 max-w-[85vw] md:static md:z-auto md:max-w-none shrink-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/95 shadow-2xl md:shadow-none flex flex-col overflow-hidden">
+        <aside id="${id}-sidebar" data-el="sidebar" aria-label="Viewer information" class="absolute inset-y-0 right-0 z-30 w-80 max-w-[85vw] md:static md:z-auto md:max-w-none shrink-0 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/95 shadow-2xl md:shadow-none flex flex-col overflow-hidden ${resizableSidebar ? 'iiif-resizable-sidebar' : ''}">
+          ${resizableSidebar ? `<div data-el="sidebar-resizer" class="iiif-sidebar-resizer" role="separator" aria-label="Information panel width" aria-orientation="vertical" aria-controls="${id}-sidebar" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="0" title="Drag to resize the information panel"></div>` : ''}
           <div class="shrink-0 flex items-center border-b border-slate-200 dark:border-slate-800 text-xs font-medium">
-            <div role="tablist" aria-label="Information sections" class="flex flex-1">
-              <button type="button" role="tab" id="${id}-tab-metadata" aria-controls="${id}-panel" data-tab="metadata" class="flex-1 py-2.5 text-center border-b-2 transition">Metadata</button>
-              <button type="button" role="tab" id="${id}-tab-structures" aria-controls="${id}-panel" data-tab="structures" class="flex-1 py-2.5 text-center border-b-2 transition">Index</button>
-              <button type="button" role="tab" id="${id}-tab-annotations" aria-controls="${id}-panel" data-tab="annotations" class="flex-1 py-2.5 text-center border-b-2 transition">Notes</button>
-              <button type="button" role="tab" id="${id}-tab-search" aria-controls="${id}-panel" data-tab="search" class="flex-1 py-2.5 text-center border-b-2 transition">Search</button>
-              <button type="button" role="tab" id="${id}-tab-map" aria-controls="${id}-panel" data-tab="map" class="flex-1 py-2.5 text-center border-b-2 transition">Map</button>
+            <div role="tablist" aria-label="Information sections" class="iiif-sidebar-tabs flex flex-1">
+              ${SIDEBAR_TABS.filter((tab) => sidebarTabs.includes(tab.id)).map((tab) => `<button type="button" role="tab" id="${id}-tab-${tab.id}" aria-controls="${id}-panel" data-tab="${tab.id}" class="flex-1 py-2.5 text-center border-b-2 transition">${tab.label}</button>`).join('')}
             </div>
             <button type="button" data-action="toggle-sidebar" title="Close Info Panel" aria-label="Close Info Panel" class="md:hidden px-3 py-2.5 text-slate-600 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-200 transition">&times;</button>
           </div>
-          <div id="${id}-panel" data-el="sidebar-content" role="tabpanel" aria-labelledby="${id}-tab-metadata" tabindex="0" class="iiif-scroll flex-1 overflow-y-auto p-4 text-xs space-y-4"></div>
+          <div id="${id}-panel" data-el="sidebar-content" role="tabpanel" tabindex="0" class="iiif-scroll flex-1 overflow-y-auto p-4 text-xs space-y-4"></div>
+          ${resizableSidebar ? `<details class="iiif-sidebar-size-settings">
+            <summary>Panel width</summary>
+            <div class="iiif-sidebar-size-controls" role="group" aria-label="Information panel width">
+              <button type="button" data-sidebar-size="narrow" aria-label="Make information panel narrower" title="Make information panel narrower">&minus;</button>
+              <button type="button" data-sidebar-size="reset" aria-label="Reset information panel width" title="Reset information panel width">Reset</button>
+              <button type="button" data-sidebar-size="wide" aria-label="Make information panel wider" title="Make information panel wider">+</button>
+            </div>
+          </details>` : ''}
         </aside>
         ${inspector ? `<aside id="${id}-json-inspector" data-el="json-inspector" class="iiif-json-inspector" aria-label="IIIF JSON inspector" hidden></aside>` : ''}
       </div>

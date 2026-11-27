@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({ osd: null }));
 vi.mock('openseadragon', () => ({ default: {} }));
 vi.mock('../src/osd-controller.js', () => ({
   OsdController: class {
-    constructor() {
+    constructor(element, options) {
+      this.onAnnotationClick = options.onAnnotationClick;
       this.open = vi.fn(); this.destroy = vi.fn(); this.resize = vi.fn();
       this.clearAnnotations = vi.fn(); this.renderAnnotationOverlays = vi.fn();
       this.focusAnnotation = vi.fn();
@@ -53,6 +54,42 @@ afterEach(() => {
 });
 
 describe('IIIF viewer', () => {
+  it.each(['metadata', 'structures', 'annotations', 'search', 'map'])('allows %s as the only tab', (tab) => {
+    viewer = new IIIFViewer(container, { manifest, sidebarTabs: [tab] });
+    const tabs = container.querySelectorAll('[role="tab"]');
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0].dataset.tab).toBe(tab);
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+    expect(tabs[0].tabIndex).toBe(0);
+    expect(container.querySelector('[role="tabpanel"]').getAttribute('aria-labelledby')).toBe(tabs[0].id);
+  });
+
+  it('selects only configured tabs and does not open disabled Notes on annotation click', async () => {
+    viewer = new IIIFViewer(container, { manifest, showSidebar: false, sidebarTabs: ['map', 'search'] });
+    const tabs = [...container.querySelectorAll('[role="tab"]')];
+    expect(tabs.map((tab) => tab.dataset.tab)).toEqual(['search', 'map']);
+    expect(viewer.sidebar.activeTab).toBe('search');
+    expect(container.querySelector('[role="tabpanel"]').getAttribute('aria-labelledby')).toBe(tabs[0].id);
+    expect(container.querySelector('[data-el="manifest-search-form"]')).not.toBeNull();
+    expect(viewer.sidebar.setTab('annotations')).toBe(false);
+    mocks.osd.onAnnotationClick();
+    expect(viewer.sidebar.isOpen).toBe(false);
+    expect(viewer.sidebar.activeTab).toBe('search');
+    await viewer.setManifest(manifest);
+    expect(viewer.sidebar.activeTab).toBe('search');
+  });
+
+  it.each([[], ['metadata', 'metadata'], ['invalid'], 'metadata', null])('rejects invalid sidebarTabs %j', (sidebarTabs) => {
+    expect(() => new IIIFViewer(container, { sidebarTabs })).toThrow(/sidebarTabs/);
+  });
+
+  it('opens Notes when an annotation is clicked and Notes is enabled', () => {
+    viewer = new IIIFViewer(container, { manifest, showSidebar: false, sidebarTabs: ['annotations'] });
+    mocks.osd.onAnnotationClick();
+    expect(viewer.sidebar.isOpen).toBe(true);
+    expect(viewer.sidebar.activeTab).toBe('annotations');
+  });
+
   it('only shares the URL of the successfully loaded manifest', async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => manifest })

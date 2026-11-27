@@ -62,7 +62,8 @@ export class SidebarPanel {
         ? summaryCollapseLength
         : null;
     this.externalViewers = externalViewers;
-    this.activeTab = 'metadata';
+    this.availableTabs = [...wrapper.querySelectorAll('[data-tab]')].map((tab) => tab.dataset.tab);
+    this.activeTab = this.availableTabs[0];
     this.annotationsVisible = true;
     this.summaryExpanded = false;
     this.selectedLang = 'en';
@@ -252,9 +253,11 @@ export class SidebarPanel {
   }
 
   setTab(tab) {
+    if (!this.availableTabs.includes(tab)) return false;
     this.activeTab = tab;
     this.updateTabStyles();
     this.onTabChange(tab);
+    return true;
   }
 
   updateTabStyles() {
