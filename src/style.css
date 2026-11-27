@@ -53,6 +53,45 @@
   border-radius: 9999px;
 }
 
+.iiif-json-inspector {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 40;
+  width: min(32rem, 90%);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #cbd5e1;
+  background: #fff;
+  color: #1e293b;
+  box-shadow: 0 0 20px rgba(15, 23, 42, 0.25);
+  font-size: 0.75rem;
+}
+.iiif-json-inspector[hidden] { display: none; }
+.dark .iiif-json-inspector { background: #0f172a; color: #e2e8f0; border-color: #475569; }
+.iiif-json-header { display: flex; justify-content: space-between; align-items: center; padding: 0.65rem; border-bottom: 1px solid #94a3b8; }
+.iiif-json-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.65rem; }
+.iiif-json-controls label { display: flex; align-items: center; gap: 0.4rem; }
+.iiif-json-inspector button, .iiif-json-inspector select { border: 1px solid #94a3b8; border-radius: 0.25rem; padding: 0.2rem 0.4rem; background: transparent; color: inherit; }
+.iiif-json-inspector button { cursor: pointer; }
+.iiif-json-inspector button:disabled { opacity: 0.5; cursor: not-allowed; }
+.iiif-json-inspector button[aria-pressed="true"] { background: #7e22ce; color: #fff; }
+.dark .iiif-json-inspector select { background: #0f172a; }
+.iiif-json-context, .iiif-json-status { padding: 0 0.65rem; }
+.iiif-json-status { min-height: 1.2em; }
+.iiif-json-content { flex: 1; min-height: 0; overflow: auto; padding: 0.65rem; font-family: monospace; line-height: 1.5; }
+.iiif-json-content pre { white-space: pre; margin: 0; }
+.iiif-json-node { white-space: nowrap; }
+.iiif-json-node summary { cursor: pointer; }
+.iiif-json-children { margin-left: 1.25rem; border-left: 1px solid #94a3b8; padding-left: 0.5rem; }
+.iiif-json-key { color: #6b21a8; }
+.iiif-json-string { color: #166534; }
+.iiif-json-number { color: #1d4ed8; }
+.iiif-json-literal { color: #b45309; }
+.dark .iiif-json-key { color: #d8b4fe; }
+.dark .iiif-json-string { color: #86efac; }
+.dark .iiif-json-number { color: #93c5fd; }
+.dark .iiif-json-literal { color: #fcd34d; }
+
 .iiif-anno-overlay {
   border: 2px solid rgba(168, 85, 247, 0.85);
   background: rgba(168, 85, 247, 0.14);

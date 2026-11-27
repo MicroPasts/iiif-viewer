@@ -70,6 +70,7 @@ describe('IIIF viewer', () => {
     viewer = new IIIFViewer(container, { manifest, showSidebar: true, onCanvasChange });
     expect(container.querySelector('[data-inspect="ruler"]')).toBeNull();
     expect(container.querySelector('[data-inspect="curtain"]')).toBeNull();
+    expect(container.querySelector('[data-action="toggle-json-inspector"]')).toBeNull();
     expect(container.querySelector('[data-el="manifest-title"]').textContent).toBe('Book');
     expect(mocks.osd.open).toHaveBeenCalledWith(
       { type: 'image', url: 'https://example.test/image/0.jpg' }, []
@@ -88,6 +89,24 @@ describe('IIIF viewer', () => {
     viewer = null;
     expect(osd.destroy).toHaveBeenCalled();
     expect(container.children).toHaveLength(0);
+  });
+
+  it('synchronizes the optional inspector with navigation and new manifests', async () => {
+    viewer = new IIIFViewer(container, { manifest, inspector: true });
+    container.querySelector('[data-action="toggle-json-inspector"]').click();
+    const scope = container.querySelector('[data-json-scope]');
+    scope.value = 'canvas';
+    scope.dispatchEvent(new Event('change', { bubbles: true }));
+    container.querySelector('[data-json-view="raw"]').click();
+    expect(container.querySelector('[data-json-content]').textContent).toContain('canvas/0');
+    viewer.goToCanvas(1);
+    expect(container.querySelector('[data-json-content]').textContent).toContain('canvas/1');
+    expect(container.querySelector('[data-json-context]').textContent).toContain('Page 2');
+    await viewer.setManifest({ ...manifest, items: manifest.items.slice(0, 1) });
+    expect(container.querySelector('[data-json-content]').textContent).toContain('canvas/0');
+    container.querySelector('[data-json-action="close"]').click();
+    expect(container.querySelector('[data-el="json-inspector"]').hidden).toBe(true);
+    expect(document.activeElement).toBe(container.querySelector('[data-action="toggle-json-inspector"]'));
   });
 
   it('initially renders index range labels in the selected language', () => {
