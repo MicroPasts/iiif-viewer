@@ -647,7 +647,11 @@ export class IIIFViewer {
     const pager = this.wrapper.querySelector('[data-el="pager-controls"]');
     const counter = this.wrapper.querySelector('[data-el="canvas-counter"]');
     if (pager && counter) {
-      pager.classList.toggle('hidden', manifest.canvases.length <= 1);
+      const showPager = manifest.canvases.length > 1;
+      const focusedControl = !showPager && pager.contains(document.activeElement);
+      pager.classList.toggle('hidden', !showPager);
+      pager.classList.toggle('inline-flex', showPager);
+      if (focusedControl) this.wrapper.querySelector('[data-el="viewer-root"]')?.focus();
       counter.textContent = `${index + 1} / ${manifest.canvases.length}`;
       counter.setAttribute('aria-label', `Canvas ${index + 1} of ${manifest.canvases.length}`);
     }

@@ -137,7 +137,7 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
           </div>
 
           <!-- Prev / Next Canvas Floating Controls -->
-          <div data-el="pager-controls" class="hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 shadow-md backdrop-blur-xs text-xs">
+          <div data-el="pager-controls" class="hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-10 items-center gap-2 px-3 py-1.5 rounded-full bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 shadow-md backdrop-blur-xs text-xs">
             <button type="button" data-action="prev-canvas" title="Previous Canvas (Left Arrow)" class="font-semibold hover:text-purple-600 dark:hover:text-purple-400 px-1">&larr; Prev</button>
             <span data-el="canvas-counter" class="font-mono text-[11px] text-slate-500 dark:text-slate-400">1 / 1</span>
             <button type="button" data-action="next-canvas" title="Next Canvas (Right Arrow)" class="font-semibold hover:text-purple-600 dark:hover:text-purple-400 px-1">Next &rarr;</button>

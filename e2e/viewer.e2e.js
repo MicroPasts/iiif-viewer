@@ -108,6 +108,58 @@ test('demonstrates independent viewer configuration options', async ({ page }) =
   await expect(noDrop.locator('[data-el="external-viewers"] a')).toHaveCount(2);
 });
 
+test('switches the whole demo and all current and future viewers between themes', async ({ page }) => {
+  await page.route('https://iiif.vam.ac.uk/collections/O24955/manifest.json', (route) =>
+    route.fulfill({ json: { type: 'Manifest', label: { en: ['Demo'] }, items: [{
+      type: 'Canvas', id: 'one', items: [{ items: [{ motivation: 'painting', body: { type: 'Image', id: 'image.jpg' } }] }],
+    }] } }));
+  await page.goto('/');
+  const toggle = page.locator('#demo-theme');
+  const main = page.locator('#iiif-viewer');
+  const root = (viewer) => viewer.locator('[data-el="viewer-root"]');
+  const darkBackground = await page.locator('body').evaluate((element) => getComputedStyle(element).backgroundColor);
+  const darkViewerBackground = await root(main).evaluate((element) => getComputedStyle(element).backgroundColor);
+  const exampleCard = page.locator('#configuration-examples details').first();
+  const darkCardBackground = await exampleCard.evaluate((element) => getComputedStyle(element).backgroundColor);
+  await expect(toggle).toHaveAccessibleName('Dark mode');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(toggle).toHaveAttribute('title', 'Switch to light mode');
+  await expect(toggle.locator('[data-theme-icon="sun"]')).toBeVisible();
+  await expect(toggle.locator('[data-theme-icon="moon"]')).toBeHidden();
+  await expect(main.locator('[data-action="toggle-theme"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('link', { name: 'View source on GitHub' }))
+    .toHaveAttribute('href', 'https://github.com/micropasts/iiif-viewer');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(toggle).toHaveAttribute('title', 'Switch to dark mode');
+  await expect(toggle.locator('[data-theme-icon="sun"]')).toBeHidden();
+  await expect(toggle.locator('[data-theme-icon="moon"]')).toBeVisible();
+  await expect(main.locator('[data-action="toggle-theme"]')).toHaveAttribute('aria-pressed', 'false');
+  expect(await page.locator('body').evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(darkBackground);
+  expect(await exampleCard.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(darkCardBackground);
+  await expect(root(main)).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await page.getByText('Hide the URL bar', { exact: true }).click();
+  const first = page.locator('#example-no-url');
+  await expect(first.locator('[data-action="toggle-theme"]')).toHaveAttribute('aria-pressed', 'false');
+  await page.getByText('Disable manifest drops', { exact: true }).click();
+  const second = page.locator('#example-no-drop');
+  await expect(second.locator('[data-action="toggle-theme"]')).toHaveAttribute('aria-pressed', 'false');
+  await first.locator('[data-action="toggle-theme"]').click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(toggle.locator('[data-theme-icon="sun"]')).toBeVisible();
+  await expect(toggle.locator('[data-theme-icon="moon"]')).toBeHidden();
+  for (const viewer of [main, first, second]) {
+    await expect(viewer.locator('[data-action="toggle-theme"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(root(viewer)).toHaveCSS('background-color', darkViewerBackground);
+  }
+  await expect(page.locator('body')).toHaveCSS('background-color', darkBackground);
+  await page.getByText('Start with fewer controls', { exact: true }).click();
+  const third = page.locator('#example-minimal');
+  await expect(third.locator('[data-action="toggle-theme"]')).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
+  await expect(root(third)).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+});
+
 test('navigates canvases and changes the display language', async ({ page }) => {
   await page.locator('[data-el="filmstrip"] [data-canvas-index="1"]').click();
   await expect(page.locator('[data-el="canvas-counter"]')).toHaveText('2 / 3');
@@ -115,6 +167,31 @@ test('navigates canvases and changes the display language', async ({ page }) => 
   await page.locator('[data-el="lang-select"]').selectOption('fr');
   await expect(page.locator('[data-el="manifest-title"]')).toHaveText('Livre');
   await expect(page.locator('[data-el="sidebar-content"]')).toContainText('Feuille 2');
+});
+
+test('shows the pager only when there are multiple navigable items', async ({ page }) => {
+  const pager = page.locator('[data-el="pager-controls"]');
+  await expect(pager).toBeVisible();
+  await expect(page.locator('[data-el="canvas-counter"]')).toHaveText('1 / 3');
+  await page.evaluate(async () => {
+    window.fullManifest = window.viewer.state.rawManifest;
+    await window.viewer.setManifest({ ...window.fullManifest, items: window.fullManifest.items.slice(0, 1) });
+  });
+  await expect(pager).toBeHidden();
+  await page.evaluate(async () => {
+    await window.viewer.setManifest({ ...window.fullManifest, items: window.fullManifest.items.slice(0, 2) });
+  });
+  await expect(pager).toBeVisible();
+  await page.locator('[data-action="next-canvas"]').click();
+  await expect(page.locator('[data-el="canvas-counter"]')).toHaveText('2 / 2');
+  await page.locator('[data-action="prev-canvas"]').click();
+  await expect(page.locator('[data-el="canvas-counter"]')).toHaveText('1 / 2');
+  await page.evaluate(async () => {
+    const { IIIFViewer } = await import('/src/index.js');
+    window.viewer.destroy();
+    window.viewer = new IIIFViewer('#viewer');
+  });
+  await expect(page.locator('[data-el="pager-controls"]')).toBeHidden();
 });
 
 test('configures external viewer links independently for each instance', async ({ page }) => {
@@ -318,6 +395,51 @@ test('loads a 3D model and toggles wireframe', async ({ page }) => {
   const wireframe = page.locator('[data-three-action="wireframe"]');
   await wireframe.click();
   await expect(wireframe).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('collapses 3D controls in narrow viewer areas without losing functionality', async ({ page }) => {
+  await page.locator('[data-el="filmstrip"] [data-canvas-index="2"]').click();
+  await expect(page.locator('[data-el="three-stats"]')).toContainText('1 mesh');
+  const toggle = page.getByRole('button', { name: '3D controls' });
+  const wireframe = page.getByRole('button', { name: 'Wireframe' });
+  await expect(toggle).toBeHidden();
+  await expect(wireframe).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Close Info Panel' }).click();
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(wireframe).toBeHidden();
+  const toolbar = page.locator('[data-el="three-toolbar"]');
+  const closed = await toolbar.boundingBox();
+  expect(closed.width).toBeLessThan(140);
+  expect(closed.height).toBeLessThan(50);
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(wireframe).toBeVisible();
+  await wireframe.click();
+  await expect(wireframe).toHaveAttribute('aria-pressed', 'true');
+  await page.getByText('Move view', { exact: true }).click();
+  const moveButton = page.getByRole('button', { name: 'Rotate 3D view left' });
+  await expect(moveButton).toBeVisible();
+  const menu = await moveButton.boundingBox();
+  const scene = await page.locator('[data-el="scene-container"]').boundingBox();
+  expect(menu.x).toBeGreaterThanOrEqual(scene.x);
+  expect(menu.x + menu.width).toBeLessThanOrEqual(scene.x + scene.width);
+  await page.keyboard.press('Escape');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toBeFocused();
+  await expect(wireframe).toBeHidden();
+  await toggle.click();
+  await expect(wireframe).toHaveAttribute('aria-pressed', 'true');
+  await expect(moveButton).toBeHidden();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(toggle).toBeHidden();
+  await expect(wireframe).toBeVisible();
+  await page.locator('#viewer').evaluate((element) => { element.style.width = '500px'; });
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(wireframe).toBeHidden();
 });
 
 test('hides image filters for 3D and restores them on returning to an image', async ({ page }) => {

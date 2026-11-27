@@ -403,6 +403,8 @@ When the viewer container itself has keyboard focus, use the left/right arrows t
 
 Use the arrow keys to navigate the sidebar tabs (Home and End select the first and last tab). With the 2D image focused, arrow keys pan and `+`/`-` zoom; the Filters panel also has pan buttons. With the 3D model focused, arrow keys pan, Shift plus arrow keys rotate, and `+`/`-` zoom. The 3D **Move view** menu provides buttons for these actions without dragging. The map has pan buttons, and locations can be selected from the list beneath it.
 
+In narrow 3D viewer areas, the controls are collapsed behind **3D controls** to leave more room for the model. Open the button to use the controls, and close it again or press Escape to return focus to the button.
+
 ### Accessibility
 
 The viewer includes labeled controls, visible keyboard focus, status announcements, and keyboard and non-drag alternatives for image, model, and map navigation. These measures do not by themselves establish WCAG conformance: integrators should provide meaningful descriptions of visual content, check contrast and responsive layouts in their host page, and test with keyboard and assistive technologies. External maps, custom 3D renderers, and manifest content may introduce additional accessibility issues.

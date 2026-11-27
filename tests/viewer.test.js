@@ -45,6 +45,26 @@ afterEach(() => {
 });
 
 describe('IIIF viewer', () => {
+  it('only shows the canvas pager for multiple navigable items', async () => {
+    viewer = new IIIFViewer(container);
+    const pager = container.querySelector('[data-el="pager-controls"]');
+    expect(pager.classList.contains('hidden')).toBe(true);
+    expect(pager.classList.contains('inline-flex')).toBe(false);
+    await viewer.setManifest(manifest);
+    expect(pager.classList.contains('hidden')).toBe(false);
+    expect(pager.classList.contains('inline-flex')).toBe(true);
+    container.querySelector('[data-action="next-canvas"]').click();
+    expect(container.querySelector('[data-el="canvas-counter"]').textContent).toBe('2 / 2');
+    container.querySelector('[data-action="prev-canvas"]').focus();
+    await viewer.setManifest({ ...manifest, items: manifest.items.slice(0, 1) });
+    expect(pager.classList.contains('hidden')).toBe(true);
+    expect(pager.classList.contains('inline-flex')).toBe(false);
+    expect(document.activeElement).toBe(container.querySelector('[data-el="viewer-root"]'));
+    await viewer.setManifest(manifest);
+    expect(pager.classList.contains('hidden')).toBe(false);
+    expect(pager.classList.contains('inline-flex')).toBe(true);
+  });
+
   it('renders a manifest, navigates canvases, changes language and cleans up', async () => {
     const onCanvasChange = vi.fn();
     viewer = new IIIFViewer(container, { manifest, showSidebar: true, onCanvasChange });

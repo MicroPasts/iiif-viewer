@@ -4,6 +4,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { escapeHtml } from './sanitize.js';
 
+let nextSceneControlsId = 0;
+
 export class BuiltInSceneViewer {
   constructor(container, sceneData, options = {}) {
     this.container = container;
@@ -35,8 +37,9 @@ export class BuiltInSceneViewer {
   }
 
   mount() {
+    const controlsId = `iiif-scene-controls-${++nextSceneControlsId}`;
     this.container.innerHTML = `
-      <div class="relative w-full h-full flex flex-col select-none">
+      <div class="iiif-scene-root relative w-full h-full flex flex-col select-none">
         <div data-el="three-canvas-host" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
         <div data-el="three-error-announcement" role="alert" class="sr-only"></div>
 
@@ -56,7 +59,9 @@ export class BuiltInSceneViewer {
         </div>
 
         <!-- Interactive 3D Controls Bar -->
-        <div class="absolute top-3 left-1/2 -translate-x-1/2 z-10 inline-flex flex-wrap items-center gap-1 p-1 rounded-lg bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 shadow-md backdrop-blur-xs text-[11px] font-medium">
+        <div data-el="three-toolbar" class="iiif-scene-toolbar absolute top-3 left-1/2 -translate-x-1/2 z-10 p-1 rounded-lg bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 shadow-md backdrop-blur-xs text-[11px] font-medium">
+          <button type="button" data-three-action="toggle-controls" aria-expanded="false" aria-controls="${controlsId}" class="iiif-scene-toolbar-toggle px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">3D controls</button>
+          <div id="${controlsId}" class="iiif-scene-toolbar-content">
           <button type="button" data-three-action="reset" title="Reset Camera" class="px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition">
             Reset
           </button>
@@ -76,7 +81,7 @@ export class BuiltInSceneViewer {
           </button>
           <details class="relative">
             <summary class="px-2 py-1 rounded cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800">Move view</summary>
-            <div class="absolute top-full left-0 mt-1 p-2 w-52 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-lg space-y-2">
+            <div class="iiif-scene-move-menu absolute top-full left-0 mt-1 p-2 w-52 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-lg space-y-2">
               <div role="group" aria-label="Rotate 3D view" class="flex items-center gap-1">
                 <span>Rotate</span>
                 <button type="button" data-three-action="rotate-left" aria-label="Rotate 3D view left" class="px-1 border rounded">&larr;</button>
@@ -103,6 +108,7 @@ export class BuiltInSceneViewer {
           <a href="${escapeHtml(this.resolvedModelUrl)}" download title="Download GLB" class="px-2 py-1 rounded text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 transition">
             &darr; GLB
           </a>
+          </div>
         </div>
 
         <!-- Model Stats & Controls Hint -->
@@ -430,7 +436,12 @@ export class BuiltInSceneViewer {
       if (!btn) return;
 
       const action = btn.dataset.threeAction;
-      if (action === 'open-toolbar-file' || action === 'open-error-file') {
+      if (action === 'toggle-controls') {
+        const toolbar = this.container.querySelector('[data-el="three-toolbar"]');
+        const open = toolbar.classList.toggle('is-open');
+        btn.setAttribute('aria-expanded', String(open));
+        if (!open) toolbar.querySelector('details').open = false;
+      } else if (action === 'open-toolbar-file' || action === 'open-error-file') {
         const input = action === 'open-toolbar-file' ? 'three-toolbar-file' : 'three-file-input';
         this.container.querySelector(`[data-el="${input}"]`)?.click();
       } else if (action === 'reset') {
@@ -479,6 +490,15 @@ export class BuiltInSceneViewer {
         }
         this.syncControlButtons();
       }
+    });
+
+    this.container.addEventListener('keydown', (event) => {
+      const toolbar = event.target.closest('[data-el="three-toolbar"]');
+      if (event.key !== 'Escape' || !toolbar?.classList.contains('is-open')) return;
+      event.preventDefault();
+      const toggle = toolbar.querySelector('[data-three-action="toggle-controls"]');
+      toggle.click();
+      toggle.focus();
     });
   }
 
