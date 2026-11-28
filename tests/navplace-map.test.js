@@ -87,4 +87,17 @@ describe('navPlace map', () => {
     expect(mocks.map.getSource('navplace').setData).toHaveBeenCalledWith(next);
     map.destroy();
   });
+
+  it('keeps map styles inside its container and removes them on destroy', () => {
+    const host = document.createElement('div');
+    const root = host.attachShadow({ mode: 'open' });
+    const container = document.createElement('div');
+    root.append(container);
+    const headStyles = document.head.querySelectorAll('style').length;
+    const map = new NavPlaceMap(container);
+    expect(container.querySelector('style')).not.toBeNull();
+    expect(document.head.querySelectorAll('style')).toHaveLength(headStyles);
+    map.destroy();
+    expect(container.childNodes).toHaveLength(0);
+  });
 });

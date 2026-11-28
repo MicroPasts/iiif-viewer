@@ -1,9 +1,12 @@
 export class FullscreenController {
-  constructor(wrapper, { height = '680px', onResize = () => {} } = {}) {
+  constructor(wrapper, { height = '680px', onResize = () => {}, host = wrapper } = {}) {
     this.wrapper = wrapper;
+    this.host = host;
     this.height = height;
     this.onResize = onResize;
     this.isFullscreen = false;
+    this.destroyed = false;
+    this.fallback = false;
 
     this._onFullscreenChange = this.handleFullscreenChange.bind(this);
     this._onKeyDown = this.handleKeyDown.bind(this);
@@ -13,24 +16,32 @@ export class FullscreenController {
   }
 
   async enter() {
-    if (this.isFullscreen) return;
+    if (this.isFullscreen || this.destroyed) return;
 
-    if (this.wrapper.requestFullscreen && document.fullscreenEnabled) {
+    if (this.host.requestFullscreen && document.fullscreenEnabled) {
       try {
-        await this.wrapper.requestFullscreen();
-        return;
+        await this.host.requestFullscreen();
       } catch {
+        if (this.destroyed) return;
         // Fallback for sandboxed iframes
+        this.fallback = true;
+        this.applyStyles(true);
+        return;
       }
+      if (this.destroyed && document.fullscreenElement === this.host && document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+      return;
     }
 
+    this.fallback = true;
     this.applyStyles(true);
   }
 
   async exit() {
     if (!this.isFullscreen) return;
 
-    if (document.fullscreenElement === this.wrapper && document.exitFullscreen) {
+    if (document.fullscreenElement === this.host && document.exitFullscreen) {
       try {
         await document.exitFullscreen();
         return;
@@ -39,6 +50,7 @@ export class FullscreenController {
       }
     }
 
+    this.fallback = false;
     this.applyStyles(false);
   }
 
@@ -47,7 +59,8 @@ export class FullscreenController {
   }
 
   handleFullscreenChange() {
-    const active = document.fullscreenElement === this.wrapper;
+    if (this.fallback) return;
+    const active = document.fullscreenElement === this.host;
     this.applyStyles(active);
   }
 
@@ -79,7 +92,9 @@ export class FullscreenController {
     exitIcon?.classList.toggle('hidden', !active);
     this.wrapper.querySelector('[data-action="toggle-fullscreen"]')?.setAttribute('aria-pressed', String(active));
 
-    requestAnimationFrame(() => this.onResize());
+    requestAnimationFrame(() => {
+      if (!this.destroyed) this.onResize();
+    });
   }
 
   destroy() {
@@ -88,5 +103,6 @@ export class FullscreenController {
     if (this.isFullscreen) {
       this.exit();
     }
+    this.destroyed = true;
   }
 }

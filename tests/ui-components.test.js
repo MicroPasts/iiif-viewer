@@ -288,4 +288,38 @@ describe('fullscreen controller', () => {
     expect(resize).toHaveBeenCalledTimes(2);
     fullscreen.destroy();
   });
+
+  it('keeps fallback fullscreen through unrelated fullscreen changes and suppresses resize after destroy', async () => {
+    const callbacks = [];
+    vi.stubGlobal('requestAnimationFrame', (callback) => { callbacks.push(callback); return callbacks.length; });
+    const resize = vi.fn();
+    const fullscreen = new FullscreenController(wrapper, { onResize: resize });
+    await fullscreen.enter();
+    document.dispatchEvent(new Event('fullscreenchange'));
+    expect(fullscreen.isFullscreen).toBe(true);
+    fullscreen.destroy();
+    callbacks.forEach((callback) => callback());
+    expect(resize).not.toHaveBeenCalled();
+    expect(wrapper.classList.contains('fixed')).toBe(false);
+  });
+
+  it('exits native fullscreen if a pending request completes after destroy', async () => {
+    const host = document.createElement('div');
+    let finish;
+    host.requestFullscreen = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    const exit = vi.fn(async () => {});
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: host });
+    vi.stubGlobal('requestAnimationFrame', (callback) => { callback(); return 1; });
+    document.exitFullscreen = exit;
+    const fullscreen = new FullscreenController(wrapper, { host });
+    const entering = fullscreen.enter();
+    fullscreen.destroy();
+    finish();
+    await entering;
+    expect(exit).toHaveBeenCalledOnce();
+    delete document.exitFullscreen;
+    delete document.fullscreenEnabled;
+    delete document.fullscreenElement;
+  });
 });

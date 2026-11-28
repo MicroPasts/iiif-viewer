@@ -1,4 +1,5 @@
 import { escapeHtml, getPlainText, sanitizeHtml } from './sanitize.js';
+import { activeElement } from './focus.js';
 
 const defaultExternalViewers = [
   { label: 'Universal Viewer', url: 'https://www.universalviewer.dev/#?iiifManifestId={manifest}' },
@@ -232,7 +233,7 @@ export class SidebarPanel {
 
   setOpen(open) {
     const sidebar = this.wrapper.querySelector('[data-el="sidebar"]');
-    const restoreFocus = !open && sidebar?.contains(document.activeElement);
+    const restoreFocus = !open && sidebar?.contains(activeElement(this.wrapper));
     this.isOpen = Boolean(open);
     this.syncOpenUI();
     if (restoreFocus) this.wrapper.querySelector('button[data-action="toggle-sidebar"]')?.focus();
@@ -281,7 +282,8 @@ export class SidebarPanel {
   ) {
     const container = this.wrapper.querySelector('[data-el="sidebar-content"]');
     if (!container || !manifest) return;
-    const focused = container.contains(document.activeElement) ? document.activeElement : null;
+    const currentFocus = activeElement(this.wrapper);
+    const focused = container.contains(currentFocus) ? currentFocus : null;
     const focusAttribute = focused && ['data-el', 'data-action', 'data-canvas-index', 'data-search-hit-index', 'data-nav-feature-index', 'data-anno-focus', 'data-copy-value']
       .find((attr) => focused.hasAttribute(attr));
     const focusValue = focusAttribute && focused.getAttribute(focusAttribute);

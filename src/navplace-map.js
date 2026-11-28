@@ -1,5 +1,5 @@
 import { Map, NavigationControl, Popup, LngLatBounds, setWorkerUrl } from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import mapStyles from 'maplibre-gl/dist/maplibre-gl.css?inline';
 import workerUrl from '#map-worker-url';
 import { escapeHtml } from './sanitize.js';
 
@@ -47,6 +47,9 @@ export class NavPlaceMap {
 
   mount() {
     this.container.innerHTML = `<div data-el="maplibre-host" class="w-full h-full"></div>`;
+    const style = document.createElement('style');
+    style.textContent = mapStyles;
+    this.container.prepend(style);
     const host = this.container.querySelector('[data-el="maplibre-host"]');
 
     this.map = new Map({

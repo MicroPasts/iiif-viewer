@@ -36,13 +36,20 @@ for (const build of ['docs', 'library']) {
         const container = document.createElement('div');
         container.id = 'build-test-viewer';
         document.body.append(container);
-        window.buildTestViewer = new IIIFViewer(container, { manifest: data, showSidebar: true });
+        window.buildTestViewer = new IIIFViewer(container, {
+          manifest: data,
+          showSidebar: true,
+          themeVars: { '--iiif-accent': '#b45309' },
+        });
       }, manifest);
       viewer = page.locator('#build-test-viewer');
+      await expect(viewer.getByRole('button', { name: 'Load', exact: true }))
+        .toHaveCSS('background-color', 'rgb(180, 83, 9)');
     }
 
     await viewer.getByRole('tab', { name: 'Map (1)' }).click();
     await expect.poll(async () => viewer.locator('.maplibregl-canvas').count()).toBe(1);
+    await expect(viewer.locator('.maplibregl-ctrl-zoom-in')).toHaveCSS('width', '29px');
     await expect.poll(() => viewer.locator('.maplibregl-canvas').evaluate((canvas) => canvas.width)).toBeGreaterThan(0);
     await expect.poll(() => workers.length).toBeGreaterThan(0);
     if (build === 'docs') {

@@ -1,3 +1,5 @@
+import { activeElement } from './focus.js';
+
 const defaultWidths = [500, 1000, 2000];
 const defaultMaxPixels = 16_000_000;
 
@@ -169,7 +171,7 @@ export class ImageDownload {
     this.info = null;
     this.sizes = [];
     const hidden = !canvas || canvas.kind !== 'canvas' || !(canvas.image?.infoJsonUrl || canvas.image?.staticUrl);
-    const focused = this.host.contains(document.activeElement) || this.toolbar.contains(document.activeElement);
+    const focused = this.host.contains(activeElement(this.wrapper)) || this.toolbar.contains(activeElement(this.wrapper));
     this.toolbar.hidden = hidden;
     this.host.hidden = true;
     this.button.setAttribute('aria-expanded', 'false');
