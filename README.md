@@ -1,5 +1,10 @@
 # IIIF Viewer (`@micropasts/iiif-viewer`)
 
+[![ORCiD](https://img.shields.io/badge/ORCiD-0000--0002--0246--2335-green.svg)](http://orcid.org/0000-0002-0246-2335)
+
+[![DOI](https://img.shields.io/badge/DOI-10.6084%2Fm9.figshare.35145877-blue?logo=figshare)](https://doi.org/10.6084/m9.figshare.35145877)
+
+
 A framework-agnostic **IIIF Presentation API 2.x, 3.0 & 4.0** viewer built with **OpenSeadragon**, **Three.js**, **MapLibre GL JS**, and **Tailwind CSS v4**. Designed for museums, archives, libraries, and digital heritage platforms to display deep-zoom 2D canvases, interactive 3D `.glb`/`.gltf` scenes, tables of contents, metadata, annotations, and geographic locations.
 
 * **Live Demo:** https://micropasts.github.io/iiif-viewer/
