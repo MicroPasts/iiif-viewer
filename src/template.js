@@ -29,7 +29,7 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
       <div data-el="status-message" role="status" class="sr-only"></div>
       <div data-el="error-message" role="alert" class="sr-only"></div>
       <!-- Top Bar -->
-      <div class="shrink-0 flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
+      <div data-el="toolbar" class="shrink-0 flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
         <div class="flex items-center gap-2 min-w-0">
           <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30 shrink-0">
             IIIF Viewer

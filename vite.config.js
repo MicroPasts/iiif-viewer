@@ -15,6 +15,10 @@ export default defineConfig(({ mode }) => {
         emptyOutDir: true,
         chunkSizeWarningLimit: 800,
         rollupOptions: {
+          input: {
+            index: resolve(__dirname, 'index.html'),
+            'shadow-demo': resolve(__dirname, 'shadow-demo.html'),
+          },
           output: {
             manualChunks: {
               three: ['three'],

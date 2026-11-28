@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Shadow DOM isolation - IIIF Viewer</title>
+    <style>
+      body { max-width: 70rem; margin: 2rem auto; padding: 0 1.5rem; font-family: Georgia, serif; color: #172554; background: #eff6ff; }
+      button { padding: 0.6rem 1rem; border: 3px solid #9a3412; border-radius: 2rem; background: #ffedd5; color: #7c2d12; font: bold 1rem Georgia, serif; cursor: pointer; }
+      button:hover { background: #fed7aa; }
+      button:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 3px; }
+      pre { overflow: auto; padding: 1rem; background: #dbeafe; }
+      #viewer { --iiif-accent: #1d4ed8; --iiif-accent-hover: #1e40af; }
+    </style>
+    <script type="module" crossorigin src="./assets/shadow-demo-Df3Ab8qI.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/openseadragon-1AIgNfqS.js">
+    <link rel="modulepreload" crossorigin href="./assets/index-BK0d2ooi.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-tn0RQdqM.css">
+  </head>
+  <body>
+    <main>
+      <a href="./">Back to the main demo</a>
+      <h1>Shadow DOM style isolation</h1>
+      <p>This page has its own heading and button styles and does not import the viewer's stylesheet. Mount the viewer to see that its styles do not reset this page, and the page's broad <code>button</code> rule does not style the viewer's controls.</p>
+      <button id="toggle-viewer" type="button" aria-controls="viewer" aria-expanded="false">Mount viewer</button>
+      <p id="mount-status" role="status">Viewer is not mounted.</p>
+      <div id="viewer"></div>
+      <h2>Standard integration</h2>
+      <p>The constructor creates an open shadow root automatically; no separate Shadow DOM API is needed. CSS variables on the host are inherited by the viewer.</p>
+      <pre><code>&lt;div id="viewer"&gt;&lt;/div&gt;
+&lt;style&gt;
+  #viewer { --iiif-accent: #1d4ed8; --iiif-accent-hover: #1e40af; }
+&lt;/style&gt;
+&lt;script type="module"&gt;
+  import { IIIFViewer } from '@micropasts/iiif-viewer';
+  const viewer = new IIIFViewer('#viewer', {
+    manifestUrl: './examples/caryatid-manifest.json',
+    theme: 'light',
+  });
+  // Call viewer.destroy() when removing the viewer.
+&lt;/script&gt;</code></pre>
+    </main>
+  </body>
+</html>

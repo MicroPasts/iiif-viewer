@@ -54,35 +54,67 @@ afterEach(() => {
 });
 
 describe('IIIF viewer', () => {
+  it('encapsulates styles and supports host theme variables without adding global styles', () => {
+    const existing = document.createElement('span');
+    container.attachShadow({ mode: 'open' }).append(existing);
+    const styles = [...document.head.querySelectorAll('style, link[rel="stylesheet"]')];
+    viewer = new IIIFViewer(container, { themeVars: { '--iiif-accent': '#b45309' } });
+    expect(container.shadowRoot).toBe(viewer.shadowRoot);
+    expect(viewer.shadowRoot.querySelector('[data-el="viewer-root"]')).not.toBeNull();
+    expect(container.style.getPropertyValue('--iiif-accent')).toBe('#b45309');
+    expect([...document.head.querySelectorAll('style, link[rel="stylesheet"]')]).toEqual(styles);
+    viewer.setThemeVars({ '--iiif-accent': '#123456', '--iiif-border': '#111111' });
+    expect(container.style.getPropertyValue('--iiif-accent')).toBe('#123456');
+    viewer.setThemeVars({ '--iiif-accent': null });
+    expect(container.style.getPropertyValue('--iiif-accent')).toBe('');
+    expect(() => viewer.setThemeVars({ color: 'red' })).toThrow(TypeError);
+    viewer.destroy();
+    expect(container.shadowRoot.contains(existing)).toBe(true);
+    expect(container.shadowRoot.querySelector('[data-el="viewer-root"]')).toBeNull();
+    viewer = null;
+  });
+
+  it('cancels a pending map mount even if the host remains connected', async () => {
+    viewer = new IIIFViewer(container, { manifest });
+    const host = document.createElement('div');
+    viewer.wrapper.append(host);
+    viewer.sidebar.activeTab = 'map';
+    const pending = viewer.mountNavMap(host, { type: 'FeatureCollection', features: [] });
+    viewer.destroyNavMap();
+    await pending;
+    expect(viewer.activeNavMap).toBeNull();
+    expect(host.childNodes).toHaveLength(0);
+  });
+
   it('keeps comparison opt-in and rejects opening it when disabled', () => {
     viewer = new IIIFViewer(container, { manifest });
-    expect(container.querySelector('[data-action="toggle-compare"]')).toBeNull();
+    expect(viewer.shadowRoot.querySelector('[data-action="toggle-compare"]')).toBeNull();
     expect(() => viewer.enterSideBySide()).toThrow('Enable sideBySide');
   });
 
   it('requires a loaded manifest before opening comparison', () => {
     viewer = new IIIFViewer(container, { sideBySide: true });
-    expect(container.querySelector('[data-action="toggle-compare"]')).not.toBeNull();
+    expect(viewer.shadowRoot.querySelector('[data-action="toggle-compare"]')).not.toBeNull();
     expect(() => viewer.enterSideBySide()).toThrow('Load a manifest');
   });
 
   it.each(['metadata', 'structures', 'annotations', 'search', 'map'])('allows %s as the only tab', (tab) => {
     viewer = new IIIFViewer(container, { manifest, sidebarTabs: [tab] });
-    const tabs = container.querySelectorAll('[role="tab"]');
+    const tabs = viewer.shadowRoot.querySelectorAll('[role="tab"]');
     expect(tabs).toHaveLength(1);
     expect(tabs[0].dataset.tab).toBe(tab);
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
     expect(tabs[0].tabIndex).toBe(0);
-    expect(container.querySelector('[role="tabpanel"]').getAttribute('aria-labelledby')).toBe(tabs[0].id);
+    expect(viewer.shadowRoot.querySelector('[role="tabpanel"]').getAttribute('aria-labelledby')).toBe(tabs[0].id);
   });
 
   it('selects only configured tabs and does not open disabled Notes on annotation click', async () => {
     viewer = new IIIFViewer(container, { manifest, showSidebar: false, sidebarTabs: ['map', 'search'] });
-    const tabs = [...container.querySelectorAll('[role="tab"]')];
+    const tabs = [...viewer.shadowRoot.querySelectorAll('[role="tab"]')];
     expect(tabs.map((tab) => tab.dataset.tab)).toEqual(['search', 'map']);
     expect(viewer.sidebar.activeTab).toBe('search');
-    expect(container.querySelector('[role="tabpanel"]').getAttribute('aria-labelledby')).toBe(tabs[0].id);
-    expect(container.querySelector('[data-el="manifest-search-form"]')).not.toBeNull();
+    expect(viewer.shadowRoot.querySelector('[role="tabpanel"]').getAttribute('aria-labelledby')).toBe(tabs[0].id);
+    expect(viewer.shadowRoot.querySelector('[data-el="manifest-search-form"]')).not.toBeNull();
     expect(viewer.sidebar.setTab('annotations')).toBe(false);
     mocks.osd.onAnnotationClick();
     expect(viewer.sidebar.isOpen).toBe(false);
@@ -123,33 +155,33 @@ describe('IIIF viewer', () => {
     viewer = new IIIFViewer(container, { manifest, persistCanvasTransform });
     const controller = mocks.osd;
     controller.resetTransform.mockClear();
-    container.querySelector('[data-action="flip-horizontal"]').click();
-    expect(container.querySelector('[data-action="flip-horizontal"]').getAttribute('aria-pressed')).toBe('true');
+    viewer.shadowRoot.querySelector('[data-action="flip-horizontal"]').click();
+    expect(viewer.shadowRoot.querySelector('[data-action="flip-horizontal"]').getAttribute('aria-pressed')).toBe('true');
     await viewer.goToCanvas(0);
     expect(controller.resetTransform).not.toHaveBeenCalled();
     await viewer.goToCanvas(1);
     expect(controller.resetTransform).toHaveBeenCalledTimes(persistCanvasTransform ? 0 : 1);
-    expect(container.querySelector('[data-action="flip-horizontal"]').getAttribute('aria-pressed')).toBe(String(persistCanvasTransform));
+    expect(viewer.shadowRoot.querySelector('[data-action="flip-horizontal"]').getAttribute('aria-pressed')).toBe(String(persistCanvasTransform));
     await viewer.setManifest(manifest);
     expect(controller.resetTransform).toHaveBeenCalledTimes(persistCanvasTransform ? 1 : 2);
-    expect(container.querySelector('[data-action="flip-horizontal"]').getAttribute('aria-pressed')).toBe('false');
+    expect(viewer.shadowRoot.querySelector('[data-action="flip-horizontal"]').getAttribute('aria-pressed')).toBe('false');
   });
 
   it('only shows the canvas pager for multiple navigable items', async () => {
     viewer = new IIIFViewer(container);
-    const pager = container.querySelector('[data-el="pager-controls"]');
+    const pager = viewer.shadowRoot.querySelector('[data-el="pager-controls"]');
     expect(pager.classList.contains('hidden')).toBe(true);
     expect(pager.classList.contains('inline-flex')).toBe(false);
     await viewer.setManifest(manifest);
     expect(pager.classList.contains('hidden')).toBe(false);
     expect(pager.classList.contains('inline-flex')).toBe(true);
-    container.querySelector('[data-action="next-canvas"]').click();
-    expect(container.querySelector('[data-el="canvas-counter"]').textContent).toBe('2 / 2');
-    container.querySelector('[data-action="prev-canvas"]').focus();
+    viewer.shadowRoot.querySelector('[data-action="next-canvas"]').click();
+    expect(viewer.shadowRoot.querySelector('[data-el="canvas-counter"]').textContent).toBe('2 / 2');
+    viewer.shadowRoot.querySelector('[data-action="prev-canvas"]').focus();
     await viewer.setManifest({ ...manifest, items: manifest.items.slice(0, 1) });
     expect(pager.classList.contains('hidden')).toBe(true);
     expect(pager.classList.contains('inline-flex')).toBe(false);
-    expect(document.activeElement).toBe(container.querySelector('[data-el="viewer-root"]'));
+    expect(viewer.shadowRoot.activeElement).toBe(viewer.shadowRoot.querySelector('[data-el="viewer-root"]'));
     await viewer.setManifest(manifest);
     expect(pager.classList.contains('hidden')).toBe(false);
     expect(pager.classList.contains('inline-flex')).toBe(true);
@@ -158,23 +190,23 @@ describe('IIIF viewer', () => {
   it('renders a manifest, navigates canvases, changes language and cleans up', async () => {
     const onCanvasChange = vi.fn();
     viewer = new IIIFViewer(container, { manifest, showSidebar: true, onCanvasChange });
-    expect(container.querySelector('[data-action="copy-permalink"]')).toBeNull();
-    expect(container.querySelector('[data-inspect="ruler"]')).toBeNull();
-    expect(container.querySelector('[data-inspect="curtain"]')).toBeNull();
-    expect(container.querySelector('[data-action="toggle-json-inspector"]')).toBeNull();
-    expect(container.querySelector('[data-el="manifest-title"]').textContent).toBe('Book');
+    expect(viewer.shadowRoot.querySelector('[data-action="copy-permalink"]')).toBeNull();
+    expect(viewer.shadowRoot.querySelector('[data-inspect="ruler"]')).toBeNull();
+    expect(viewer.shadowRoot.querySelector('[data-inspect="curtain"]')).toBeNull();
+    expect(viewer.shadowRoot.querySelector('[data-action="toggle-json-inspector"]')).toBeNull();
+    expect(viewer.shadowRoot.querySelector('[data-el="manifest-title"]').textContent).toBe('Book');
     expect(mocks.osd.open).toHaveBeenCalledWith(
       { type: 'image', url: 'https://example.test/image/0.jpg' }, []
     );
-    container.querySelector('[data-canvas-index="1"]').click();
+    viewer.shadowRoot.querySelector('[data-canvas-index="1"]').click();
     expect(viewer.state.canvasIndex).toBe(1);
     expect(onCanvasChange).toHaveBeenLastCalledWith(expect.objectContaining({ label: 'Page 2' }), 1);
     viewer.setLanguage('fr');
-    expect(container.querySelector('[data-el="manifest-title"]').textContent).toBe('Livre');
-    expect(container.querySelector('[data-el="sidebar-content"]').textContent).toContain('Feuille 2');
-    container.querySelector('[data-action="toggle-theme"]').click();
+    expect(viewer.shadowRoot.querySelector('[data-el="manifest-title"]').textContent).toBe('Livre');
+    expect(viewer.shadowRoot.querySelector('[data-el="sidebar-content"]').textContent).toContain('Feuille 2');
+    viewer.shadowRoot.querySelector('[data-action="toggle-theme"]').click();
     expect(viewer.state.theme).toBe('light');
-    expect(container.querySelector('[data-action="toggle-theme"]').getAttribute('aria-pressed')).toBe('false');
+    expect(viewer.shadowRoot.querySelector('[data-action="toggle-theme"]').getAttribute('aria-pressed')).toBe('false');
     const osd = mocks.osd;
     viewer.destroy();
     viewer = null;
@@ -184,20 +216,20 @@ describe('IIIF viewer', () => {
 
   it('synchronizes the optional inspector with navigation and new manifests', async () => {
     viewer = new IIIFViewer(container, { manifest, inspector: true });
-    container.querySelector('[data-action="toggle-json-inspector"]').click();
-    const scope = container.querySelector('[data-json-scope]');
+    viewer.shadowRoot.querySelector('[data-action="toggle-json-inspector"]').click();
+    const scope = viewer.shadowRoot.querySelector('[data-json-scope]');
     scope.value = 'canvas';
     scope.dispatchEvent(new Event('change', { bubbles: true }));
-    container.querySelector('[data-json-view="raw"]').click();
-    expect(container.querySelector('[data-json-content]').textContent).toContain('canvas/0');
+    viewer.shadowRoot.querySelector('[data-json-view="raw"]').click();
+    expect(viewer.shadowRoot.querySelector('[data-json-content]').textContent).toContain('canvas/0');
     viewer.goToCanvas(1);
-    expect(container.querySelector('[data-json-content]').textContent).toContain('canvas/1');
-    expect(container.querySelector('[data-json-context]').textContent).toContain('Page 2');
+    expect(viewer.shadowRoot.querySelector('[data-json-content]').textContent).toContain('canvas/1');
+    expect(viewer.shadowRoot.querySelector('[data-json-context]').textContent).toContain('Page 2');
     await viewer.setManifest({ ...manifest, items: manifest.items.slice(0, 1) });
-    expect(container.querySelector('[data-json-content]').textContent).toContain('canvas/0');
-    container.querySelector('[data-json-action="close"]').click();
-    expect(container.querySelector('[data-el="json-inspector"]').hidden).toBe(true);
-    expect(document.activeElement).toBe(container.querySelector('[data-action="toggle-json-inspector"]'));
+    expect(viewer.shadowRoot.querySelector('[data-json-content]').textContent).toContain('canvas/0');
+    viewer.shadowRoot.querySelector('[data-json-action="close"]').click();
+    expect(viewer.shadowRoot.querySelector('[data-el="json-inspector"]').hidden).toBe(true);
+    expect(viewer.shadowRoot.activeElement).toBe(viewer.shadowRoot.querySelector('[data-action="toggle-json-inspector"]'));
   });
 
   it('initially renders index range labels in the selected language', () => {
@@ -209,8 +241,8 @@ describe('IIIF viewer', () => {
       language: 'fr',
       showSidebar: true,
     });
-    container.querySelector('[data-tab="structures"]').click();
-    expect(container.querySelector('[data-el="sidebar-content"]').textContent).toContain('Chapitre');
+    viewer.shadowRoot.querySelector('[data-tab="structures"]').click();
+    expect(viewer.shadowRoot.querySelector('[data-el="sidebar-content"]').textContent).toContain('Chapitre');
   });
 
   it.each([
@@ -222,7 +254,7 @@ describe('IIIF viewer', () => {
   ])('configures external viewer links: $externalViewers', ({ externalViewers, labels }) => {
     const manifestId = 'https://example.test/manifest?a=1&b=two';
     viewer = new IIIFViewer(container, { manifest: { ...manifest, id: manifestId }, externalViewers });
-    const content = container.querySelector('[data-el="sidebar-content"]');
+    const content = viewer.shadowRoot.querySelector('[data-el="sidebar-content"]');
     const links = [...content.querySelectorAll('[data-el="external-viewers"] a')];
     expect(links.map((link) => link.textContent.trim().slice(0, -2))).toEqual(labels);
     expect(content.textContent.includes('Open in Other IIIF Tools')).toBe(labels.length > 0);
@@ -259,8 +291,8 @@ describe('IIIF viewer', () => {
     expect(fetch.mock.calls[0][0]).toBe('/proxy?url=https%3A%2F%2Fexample.test%2Fmanifest');
     expect(viewer.state.manifest.label).toBe('Book');
     await viewer.loadManifest('https://example.test/missing');
-    expect(container.querySelector('[data-el="error-box"]').textContent).toContain('HTTP 404');
-    expect(container.querySelector('[role="alert"]').textContent).toContain('HTTP 404');
+    expect(viewer.shadowRoot.querySelector('[data-el="error-box"]').textContent).toContain('HTTP 404');
+    expect(viewer.shadowRoot.querySelector('[role="alert"]').textContent).toContain('HTTP 404');
   });
 
   it.each(['current canvas', 'different canvas', 'different manifest'])(
@@ -314,7 +346,7 @@ describe('IIIF viewer', () => {
   ])('controls manifest drops (enabled: $enabled)', ({ allowManifestDrop, enabled }) => {
     viewer = new IIIFViewer(container, { showUrlInput: false, allowManifestDrop });
     const loadManifest = vi.spyOn(viewer, 'loadManifest').mockResolvedValue();
-    const root = container.querySelector('[data-el="viewer-root"]');
+    const root = viewer.shadowRoot.querySelector('[data-el="viewer-root"]');
     const dragover = new Event('dragover', { bubbles: true, cancelable: true });
     const drop = new Event('drop', { bubbles: true, cancelable: true });
     Object.defineProperty(drop, 'dataTransfer', {
@@ -328,23 +360,23 @@ describe('IIIF viewer', () => {
     expect(drop.defaultPrevented).toBe(true);
     if (enabled) {
       expect(loadManifest).toHaveBeenCalledWith('https://example.test/manifest');
-      expect(container.textContent).toContain('Drag a IIIF link here');
+      expect(viewer.shadowRoot.textContent).toContain('Drag a IIIF link here');
     } else {
       expect(loadManifest).not.toHaveBeenCalled();
-      expect(container.textContent).not.toContain('Drag a IIIF link here');
-      expect(container.textContent).toContain('Call loadManifest()');
+      expect(viewer.shadowRoot.textContent).not.toContain('Drag a IIIF link here');
+      expect(viewer.shadowRoot.textContent).toContain('Call loadManifest()');
     }
   });
 
   it('limits shortcuts to viewer focus and exposes image pan buttons', () => {
     viewer = new IIIFViewer(container, { manifest, showSidebar: true });
-    const root = container.querySelector('[data-el="viewer-root"]');
-    const button = container.querySelector('[data-action="zoom-in"]');
+    const root = viewer.shadowRoot.querySelector('[data-el="viewer-root"]');
+    const button = viewer.shadowRoot.querySelector('[data-action="zoom-in"]');
     button.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     expect(viewer.state.canvasIndex).toBe(0);
     root.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     expect(viewer.state.canvasIndex).toBe(1);
-    container.querySelector('[data-action="pan-left"]').click();
+    viewer.shadowRoot.querySelector('[data-action="pan-left"]').click();
     expect(mocks.osd.panBy).toHaveBeenCalledWith(-1, 0);
   });
 
@@ -360,9 +392,9 @@ describe('IIIF viewer', () => {
       ],
     };
     viewer = new IIIFViewer(container, { manifest: sceneManifest, onSelectScene: () => ({}) });
-    const controls = container.querySelector('[data-el="zoom-controls"]');
-    const toggle = container.querySelector('[data-action="toggle-filters"]');
-    const bar = container.querySelector('[data-el="filter-bar"]');
+    const controls = viewer.shadowRoot.querySelector('[data-el="zoom-controls"]');
+    const toggle = viewer.shadowRoot.querySelector('[data-action="toggle-filters"]');
+    const bar = viewer.shadowRoot.querySelector('[data-el="filter-bar"]');
     toggle.click();
     bar.querySelector('[data-filter="brightness"]').focus();
     await viewer.goToCanvas(1);
@@ -371,7 +403,7 @@ describe('IIIF viewer', () => {
     expect(controls.classList.contains('inline-flex')).toBe(false);
     expect(bar.classList.contains('hidden')).toBe(true);
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(document.activeElement).toBe(container.querySelector('[data-el="viewer-root"]'));
+    expect(viewer.shadowRoot.activeElement).toBe(viewer.shadowRoot.querySelector('[data-el="viewer-root"]'));
     await viewer.goToCanvas(0);
     expect(controls.classList.contains('hidden')).toBe(false);
     expect(controls.classList.contains('inline-flex')).toBe(true);

@@ -18,6 +18,7 @@ A framework-agnostic **IIIF Presentation API 2.x, 3.0 & 4.0** viewer built with 
   - [From GitHub Packages](#from-github-packages)
 - [Quick Start](#quick-start)
   - [Vanilla JS / ES Modules](#vanilla-js--es-modules)
+  - [Customising Colours & Styles](#customising-colours--styles)
   - [Load a manifest without the URL bar](#load-a-manifest-without-the-url-bar)
   - [Configure external viewer links](#configure-external-viewer-links)
   - [Language and selection callbacks](#language-and-selection-callbacks)
@@ -130,9 +131,36 @@ Ensure your HTML contains the target mount element:
 <div id="iiif-viewer"></div>
 ```
 
-Instantiate the viewer in a browser with a DOM; 3D models and the map also require WebGL support. The stylesheet includes Tailwind preflight and utility rules, so check for interactions with styles on the host page.
+Instantiate the viewer in a browser with a DOM; 3D models and the map also require WebGL support. Each viewer mounts in an open Shadow DOM and injects its own compiled styles, isolating Tailwind preflight from the host page. The `style.css` import is retained for compatibility but is no longer required.
+
+Tailwind's generated `@property` rules are not reliably registered from a shadow root. The viewer supplies matching scoped defaults for its generated utilities instead of registering `--tw-*` properties globally, which could change a host application's styles. MapLibre styles are installed inside the viewer when its map is opened.
+
+See the [Shadow DOM isolation demo](https://micropasts.github.io/iiif-viewer/shadow-demo.html) for a host page with its own heading and button styles.
 
 Call `viewer.destroy()` when removing the viewer, such as when a framework component unmounts. Multiple viewers can be mounted in separate elements.
+
+### Customising Colours & Styles
+
+Set semantic CSS custom properties on the host element; they are inherited into the Shadow DOM. The viewer supplies light and dark defaults when a property is not set.
+
+```css
+#iiif-viewer {
+  --iiif-accent: #b45309;
+  --iiif-accent-hover: #92400e;
+  --iiif-accent-contrast: #fff;
+  --iiif-bg: #f8fafc;
+  --iiif-surface: #fff;
+  --iiif-surface-muted: #f1f5f9;
+  --iiif-text: #1e293b;
+  --iiif-text-muted: #475569;
+  --iiif-border: #cbd5e1;
+  --iiif-radius: 0.75rem;
+}
+```
+
+Alternatively, pass `themeVars: { '--iiif-accent': '#b45309' }` to the constructor or call `viewer.setThemeVars({ '--iiif-accent': '#b45309' })` later. Values must be strings; pass `null` to remove an inline property and return to the CSS cascade. Supply colours with adequate contrast for the chosen theme.
+
+Try the interactive **Customise viewer colours** example in the [demo](https://micropasts.github.io/iiif-viewer/#configuration-examples).
 
 ### Load a manifest without the URL bar
 
@@ -144,7 +172,6 @@ Set `manifestUrl` to load a manifest when the viewer is created, `showUrlInput: 
 
 ```javascript
 import { IIIFViewer } from '@micropasts/iiif-viewer';
-import '@micropasts/iiif-viewer/style.css';
 
 const viewer = new IIIFViewer('#iiif-viewer', {
   manifestUrl: 'https://iiif.io/api/cookbook/recipe/0009-book-1/manifest.json',
@@ -357,6 +384,7 @@ onBeforeUnmount(() => viewer?.destroy());
 | `dracoDecoderPath` | `string` | Google CDN 1.5.7 | Path/URL to Draco WASM/JS decoders for Draco-compressed `.glb` models. |
 | `mapStyle` | `string \| object` | OpenFreeMap Liberty | MapLibre style URL or style object for the `navPlace` map. |
 | `theme` | `'dark' \| 'light'` | `'dark'` | Initial scoped theme for the viewer container. |
+| `themeVars` | `object` | `{}` | CSS custom properties (`--iiif-*`) applied inline to the host. See [Customising Colours & Styles](#customising-colours--styles). |
 | `language` | `string` | `'en'` | Preferred language code for manifest labels and metadata. |
 | `summaryCollapseLength` | `number` | `300` | Plain-text summary length above which a Show more control appears; set to `0` or a negative number to disable collapsing. |
 | `physicalRuler` | `boolean` | `false` | Enable the physical scale and manual calibration controls for 2D images. |
@@ -470,6 +498,7 @@ The separate full-resolution download does not include layers, rotation, flips o
 | `getPermalink` | `getPermalink()` | Returns a shareable URL for the loaded 2D image view when `permalink` is enabled; throws if the view cannot be shared. |
 | `resolveUrl` | `resolveUrl(url, resourceType)` | Resolves a URL through configured `proxyRoutes`, `assetProxyUrl`, or `proxyUrl`. |
 | `setTheme` | `setTheme('dark' \| 'light')` | Switches the viewer theme between dark and light mode. |
+| `setThemeVars` | `setThemeVars(vars)` | Updates `--iiif-*` host properties; use `null` to remove an inline value. |
 | `setLanguage` | `setLanguage(language)` | Updates manifest, canvas, and range labels and metadata for the selected language. |
 | `toggleTheme` | `toggleTheme()` | Toggles between dark and light mode. |
 | `toggleSidebar` | `toggleSidebar()` | Shows or hides the sidebar. |
@@ -498,7 +527,7 @@ The viewer includes labeled controls, visible keyboard focus, status announcemen
 
 ## Local Development & GitHub Pages Build
 
-The demo has an optional **Take a tour** walkthrough powered by [Driver.js](https://driverjs.com/) ([MIT license](./public/driver-js-license.txt)); it is not part of the published viewer library.
+The demo has an optional **Take a tour** walkthrough covering the viewer, comparison and colour examples, and the Shadow DOM isolation demo. It is powered by [Driver.js](https://driverjs.com/) ([MIT license](./public/driver-js-license.txt)) and is not part of the published viewer library.
 
 Use Node.js 22 and npm for local development (the current project uses Vite 6). Vite 8 requires Node.js 20.19+ or 22.12+ and a change to the docs build's `manualChunks` configuration; it is not currently configured for this project.
 

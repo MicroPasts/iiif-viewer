@@ -1,4 +1,5 @@
-import './style.css';
+import viewerStyles from './style.css?inline';
+import './legacy-style.css';
 import {
   parseIIIFManifest,
   parseAnnotationItems,
@@ -19,6 +20,7 @@ import { configurePermalink, parsePermalink, serializePermalink } from './permal
 import { SidebarResizer } from './sidebar-resizer.js';
 import { configureSidebarTabs } from './sidebar-tabs.js';
 import { SideBySide } from './side-by-side.js';
+import { activeElement } from './focus.js';
 
 function extractDroppedManifestUrl(dataTransfer) {
   if (!dataTransfer) return null;
@@ -70,6 +72,7 @@ export class IIIFViewer {
       dracoDecoderPath: options.dracoDecoderPath || undefined,
       mapStyle: options.mapStyle || undefined,
       theme: options.theme || 'dark',
+      themeVars: options.themeVars ?? {},
       language: options.language || 'en',
       showUrlInput: options.showUrlInput ?? true,
       allowManifestDrop: options.allowManifestDrop ?? true,
@@ -143,6 +146,22 @@ export class IIIFViewer {
     return this.resolver.resolve(url, resourceType);
   }
 
+  setThemeVars(vars) {
+    if (!vars || typeof vars !== 'object' || Array.isArray(vars)) {
+      throw new TypeError('themeVars must be an object of --iiif-* CSS custom properties.');
+    }
+    for (const [name, value] of Object.entries(vars)) {
+      if (!/^--iiif-[a-z][a-z0-9-]*$/.test(name) ||
+          (value !== null && typeof value !== 'string')) {
+        throw new TypeError('themeVars keys must be --iiif-* custom properties with string or null values.');
+      }
+    }
+    for (const [name, value] of Object.entries(vars)) {
+      if (value === null) this.container.style.removeProperty(name);
+      else this.container.style.setProperty(name, value);
+    }
+  }
+
   setProxyRoutes(proxyRoutes) {
     this.options.proxyRoutes = proxyRoutes;
     this.resolver.setProxyRoutes(proxyRoutes);
@@ -154,8 +173,12 @@ export class IIIFViewer {
   }
 
   mount() {
+    this.setThemeVars(this.options.themeVars);
+    this.shadowRoot = this.container.shadowRoot ?? this.container.attachShadow({ mode: 'open' });
+    this.styleElement = document.createElement('style');
+    this.styleElement.textContent = viewerStyles;
     this.wrapper = document.createElement('div');
-    this.wrapper.className = this.state.theme === 'dark' ? 'dark' : '';
+    this.wrapper.className = this.state.theme === 'dark' ? 'iiif-theme dark' : 'iiif-theme';
     this.wrapper.innerHTML = renderShell({
       showUrlInput: this.options.showUrlInput,
       allowManifestDrop: this.options.allowManifestDrop,
@@ -168,8 +191,7 @@ export class IIIFViewer {
       sideBySide: this.options.sideBySide,
     });
 
-    this.container.innerHTML = '';
-    this.container.appendChild(this.wrapper);
+    this.shadowRoot.append(this.styleElement, this.wrapper);
     this.setTheme(this.state.theme);
 
     this.osdController = new OsdController(
@@ -248,6 +270,7 @@ export class IIIFViewer {
 
     this.fullscreen = new FullscreenController(this.wrapper, {
       height: this.options.height,
+      host: this.container,
       onResize: () => this.handleViewportResize(),
     });
 
@@ -292,7 +315,7 @@ export class IIIFViewer {
   exitSideBySide() {
     if (!this.comparison) return;
     const comparison = this.comparison;
-    const restoreFocus = comparison.host.contains(document.activeElement);
+    const restoreFocus = comparison.host.contains(activeElement(this.wrapper));
     this.comparison = null;
     comparison.destroy();
     this.wrapper.querySelector('[data-action="toggle-compare"]')?.setAttribute('aria-expanded', 'false');
@@ -314,8 +337,8 @@ export class IIIFViewer {
 
   setInspectionTools({ physicalRuler = this.options.physicalRuler, layersCurtain = this.options.layersCurtain, measurement = this.options.measurement } = {}) {
     if (physicalRuler === this.options.physicalRuler && layersCurtain === this.options.layersCurtain && measurement === this.options.measurement) return;
-    const hadFocus = this.wrapper.querySelector('[data-el="inspection-tools"]')?.contains(document.activeElement) ||
-      this.wrapper.querySelector('[data-el="inspection-buttons"]')?.contains(document.activeElement);
+    const hadFocus = this.wrapper.querySelector('[data-el="inspection-tools"]')?.contains(activeElement(this.wrapper)) ||
+      this.wrapper.querySelector('[data-el="inspection-buttons"]')?.contains(activeElement(this.wrapper));
     this.inspectionTools?.destroy();
     this.inspectionTools = null;
     this.options.physicalRuler = physicalRuler;
@@ -751,8 +774,9 @@ export class IIIFViewer {
 
   async mountNavMap(hostEl, featureCollection) {
     this.destroyNavMap();
+    const generation = this.navMapGeneration;
     const { NavPlaceMap } = await import('./navplace-map.js');
-    if (this.sidebar.activeTab !== 'map' || !hostEl.isConnected) return;
+    if (this.navMapGeneration !== generation || this.sidebar.activeTab !== 'map' || !hostEl.isConnected) return;
 
     this.activeNavMap = new NavPlaceMap(hostEl, {
       featureCollection,
@@ -763,6 +787,7 @@ export class IIIFViewer {
   }
 
   destroyNavMap() {
+    this.navMapGeneration = (this.navMapGeneration || 0) + 1;
     this.activeNavMap?.destroy?.();
     this.activeNavMap = null;
   }
@@ -790,8 +815,8 @@ export class IIIFViewer {
 
     if (item.kind === 'scene' && item.scene?.modelUrl) {
       this.osdController.clearAnnotations();
-      const focusedControl = zoomControls?.contains(document.activeElement) ||
-        filterBar?.contains(document.activeElement);
+      const focusedControl = zoomControls?.contains(activeElement(this.wrapper)) ||
+        filterBar?.contains(activeElement(this.wrapper));
       osdEl?.classList.add('hidden');
       zoomControls?.classList.add('hidden');
       zoomControls?.classList.remove('inline-flex');
@@ -830,7 +855,7 @@ export class IIIFViewer {
     const counter = this.wrapper.querySelector('[data-el="canvas-counter"]');
     if (pager && counter) {
       const showPager = manifest.canvases.length > 1;
-      const focusedControl = !showPager && pager.contains(document.activeElement);
+      const focusedControl = !showPager && pager.contains(activeElement(this.wrapper));
       pager.classList.toggle('hidden', !showPager);
       pager.classList.toggle('inline-flex', showPager);
       if (focusedControl) this.wrapper.querySelector('[data-el="viewer-root"]')?.focus();
@@ -990,6 +1015,7 @@ export class IIIFViewer {
     this.imageDownload?.destroy();
     this.sidebarResizer?.destroy();
     this.osdController?.destroy();
-    this.container.innerHTML = '';
+    this.wrapper.remove();
+    this.styleElement.remove();
   }
 }

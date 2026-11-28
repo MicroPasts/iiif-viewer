@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>IIIF Viewer — Presentation 2.0, 3.0 &amp; 4.0 Sandbox</title>
+    <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body class="bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100 p-6 sm:p-8 font-sans">
     <div class="max-w-6xl mx-auto space-y-4">
@@ -26,6 +27,7 @@
               </svg>
             </a>
             <button type="button" id="demo-tour" class="rounded-md border border-slate-400 dark:border-slate-600 px-3 py-2 font-semibold hover:bg-slate-200 dark:hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-500">Take a tour</button>
+            <a href="./shadow-demo.html" data-tour="shadow-demo" class="rounded-md border border-slate-400 dark:border-slate-600 px-3 py-2 font-semibold hover:bg-slate-200 dark:hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-500">Shadow DOM isolation demo</a>
           </div>
         </div>
 
@@ -89,6 +91,27 @@
           <h2 id="examples-heading" class="text-xl font-bold">Configuration examples</h2>
           <p class="text-sm text-slate-600 dark:text-slate-300">Open an example to load a separate viewer. Most use a local mock-up of a British Museum Caryatid manifest; the orientation and comparison examples use a UCLA book manifest.</p>
         </div>
+
+        <details class="rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900 p-4">
+          <summary data-tour="colours" class="cursor-pointer font-semibold">Customise viewer colours</summary>
+          <div class="space-y-3 pt-3">
+            <p class="text-sm">Choose an accent to update this viewer without changing the rest of the page. Default restores the viewer's theme colours. Try the page theme toggle too; custom colours stay in place in both themes. Check that your chosen colours have sufficient contrast.</p>
+            <pre class="overflow-auto rounded bg-slate-900 p-3 text-xs text-white"><code>const viewer = new IIIFViewer('#example-colours', {
+  manifestUrl: './examples/caryatid-manifest.json',
+  themeVars: { '--iiif-accent': '#b45309', '--iiif-accent-hover': '#92400e' },
+});
+
+viewer.setThemeVars({ '--iiif-accent': '#0f766e', '--iiif-accent-hover': '#115e59' });
+// Use null to remove an inline override and restore the CSS default.</code></pre>
+            <div role="group" aria-label="Viewer accent colour" class="flex flex-wrap items-center gap-2">
+              <span class="text-sm font-medium">Accent:</span>
+              <button type="button" data-colour="amber" aria-pressed="true" class="rounded border border-amber-700 bg-amber-700 px-3 py-1 text-sm font-medium text-white hover:bg-amber-800 aria-pressed:ring-2 aria-pressed:ring-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700">Amber</button>
+              <button type="button" data-colour="teal" aria-pressed="false" class="rounded border border-teal-700 bg-teal-700 px-3 py-1 text-sm font-medium text-white hover:bg-teal-800 aria-pressed:ring-2 aria-pressed:ring-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700">Teal</button>
+              <button type="button" data-colour="default" aria-pressed="false" class="rounded border border-slate-400 bg-white px-3 py-1 text-sm font-medium text-slate-900 hover:bg-slate-100 aria-pressed:ring-2 aria-pressed:ring-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-600 dark:border-slate-500 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700">Default</button>
+            </div>
+            <div id="example-colours"></div>
+          </div>
+        </details>
 
         <details class="rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900 p-4">
           <summary class="cursor-pointer font-semibold">Hide the URL bar</summary>
@@ -167,7 +190,7 @@
         </details>
 
         <details class="rounded-lg border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900 p-4">
-          <summary class="cursor-pointer font-semibold">Compare canvases side by side</summary>
+          <summary data-tour="comparison" class="cursor-pointer font-semibold">Compare canvases side by side</summary>
           <div class="space-y-3 pt-3">
             <p class="text-sm">Select Compare to view two pages of this book. Open Comparison settings to choose another canvas, load a different manifest, or swap panes. Sync View remains available while you compare.</p>
             <pre class="overflow-auto rounded bg-slate-900 p-3 text-xs text-white"><code>new IIIFViewer('#example-side-by-side', {
@@ -261,7 +284,7 @@
       }
       themeButton.addEventListener('click', toggleDemoTheme);
       document.addEventListener('click', (event) => {
-        if (!event.target.closest('[data-el="viewer-root"] [data-action="toggle-theme"]')) return;
+        if (!event.composedPath().some((element) => element instanceof Element && element.matches('[data-action="toggle-theme"]'))) return;
         event.stopPropagation();
         toggleDemoTheme();
       }, true);
@@ -304,7 +327,13 @@
       });
 
       const exampleManifest = './examples/caryatid-manifest.json';
+      const colourPresets = {
+        amber: { '--iiif-accent': '#b45309', '--iiif-accent-hover': '#92400e' },
+        teal: { '--iiif-accent': '#0f766e', '--iiif-accent-hover': '#115e59' },
+        default: { '--iiif-accent': null, '--iiif-accent-hover': null },
+      };
       const exampleOptions = {
+        'example-colours': { showSidebar: true, themeVars: colourPresets.amber },
         'example-no-url': { showUrlInput: false },
         'example-no-drop': { allowManifestDrop: false },
         'example-minimal': {
@@ -330,6 +359,13 @@
           if (details.open && !exampleViewer) {
             exampleViewer = new IIIFViewer(container, { manifestUrl: exampleManifest, ...options, theme });
             viewers.add(exampleViewer);
+            if (id === 'example-colours') {
+              const buttons = details.querySelectorAll('[data-colour]');
+              buttons.forEach((button) => button.addEventListener('click', () => {
+                exampleViewer.setThemeVars(colourPresets[button.dataset.colour]);
+                buttons.forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+              }));
+            }
           }
         });
       }

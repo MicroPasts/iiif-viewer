@@ -197,7 +197,7 @@ test('uses metadata, direct calibration and a drawn calibration line', async ({ 
       one.x = 1;
       const a = item.imageToViewerElementCoordinates(zero);
       const b = item.imageToViewerElementCoordinates(one);
-      const display = document.querySelector('[data-inspect="ruler-display"]');
+      const display = window.viewer.shadowRoot.querySelector('[data-inspect="ruler-display"]');
       return {
         screenPixelsPerImagePixel: Math.hypot(b.x - a.x, b.y - a.y),
         width: parseFloat(display.style.width),

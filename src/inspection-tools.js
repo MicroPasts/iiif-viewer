@@ -4,6 +4,7 @@ import { extractLangValue } from './parser.js';
 import { preserveSecureTileUrls } from './iiif-tile-source.js';
 import { MeasurementTools } from './measurement-tools.js';
 import { viewerToImagePoint } from './image-coordinates.js';
+import { activeElement } from './focus.js';
 
 function sourceFor(image, resolveUrl) {
   if (image?.infoJsonUrl) return resolveUrl(image.infoJsonUrl, 'image');
@@ -102,7 +103,7 @@ export class InspectionTools {
   }
 
   setCanvas(manifest, index) {
-    const restoreFocus = this.host.contains(document.activeElement) || this.toolbar.contains(document.activeElement);
+    const restoreFocus = this.host.contains(activeElement(this.wrapper)) || this.toolbar.contains(activeElement(this.wrapper));
     this.generation += 1;
     this.cancelDrawing();
     this.removeLayers();
