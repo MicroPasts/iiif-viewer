@@ -1,0 +1,104 @@
+{
+  "@context": "http://iiif.io/api/presentation/3/context.json",
+  "id": "https://micropasts.github.io/iiif-viewer/examples/media-manifest.json",
+  "type": "Manifest",
+  "label": { "en": ["Audio and video demo"] },
+  "summary": { "en": ["Public-domain media samples from MDN with example temporal annotations."] },
+  "items": [
+    {
+      "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/canvas/video",
+      "type": "Canvas",
+      "label": { "en": ["Flower video"] },
+      "width": 960,
+      "height": 540,
+      "duration": 5.055,
+      "items": [{
+        "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/page/video",
+        "type": "AnnotationPage",
+        "items": [{
+          "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/painting/video",
+          "type": "Annotation",
+          "motivation": "painting",
+          "body": {
+            "id": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+            "type": "Video",
+            "format": "video/mp4"
+          },
+          "target": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/canvas/video"
+        }]
+      }],
+      "annotations": [{
+        "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/annotations/video",
+        "type": "AnnotationPage",
+        "items": [
+          {
+            "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/caption/video",
+            "type": "Annotation",
+            "motivation": "supplementing",
+            "body": {
+              "id": "https://micropasts.github.io/iiif-viewer/examples/media-captions.vtt",
+              "type": "Text",
+              "format": "text/vtt",
+              "language": "en",
+              "label": { "en": ["English captions"] }
+            },
+            "target": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/canvas/video"
+          },
+          {
+            "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/note/video",
+            "type": "Annotation",
+            "motivation": "commenting",
+            "body": { "type": "TextualBody", "value": "A closer look at the flower." },
+            "target": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/canvas/video#t=2,4"
+          }
+        ]
+      }]
+    },
+    {
+      "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/canvas/audio",
+      "type": "Canvas",
+      "label": { "en": ["T. rex audio"] },
+      "duration": 2.074218,
+      "items": [{
+        "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/page/audio",
+        "type": "AnnotationPage",
+        "items": [{
+          "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/painting/audio",
+          "type": "Annotation",
+          "motivation": "painting",
+          "body": {
+            "id": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+            "type": "Audio",
+            "format": "audio/mpeg"
+          },
+          "target": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/canvas/audio"
+        }]
+      }],
+      "annotations": [{
+        "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/annotations/audio",
+        "type": "AnnotationPage",
+        "items": [{
+          "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/note/audio",
+          "type": "Annotation",
+          "motivation": "commenting",
+          "body": { "type": "TextualBody", "value": "Listen to the second half of the roar." },
+          "target": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/canvas/audio#t=1,2"
+        }]
+      }]
+    }
+  ],
+  "structures": [
+    {
+      "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/range/video",
+      "type": "Range",
+      "label": { "en": ["Flower: 2 to 4 seconds"] },
+      "items": ["https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/canvas/video#t=2,4"]
+    },
+    {
+      "id": "https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/range/audio",
+      "type": "Range",
+      "label": { "en": ["Roar: 1 to 2 seconds"] },
+      "items": ["https://micropasts.github.io/iiif-viewer/examples/iiif/media-demo/canvas/audio#t=1,2"]
+    }
+  ]
+}

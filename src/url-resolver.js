@@ -12,7 +12,7 @@ export class UrlResolver {
   /**
    * Resolves a manifest or asset URL through proxyRoutes, assetProxyUrl, or proxyUrl.
    * @param {string} url
-   * @param {'manifest'|'image'|'model'|'thumbnail'|'annotation'} resourceType
+   * @param {'manifest'|'image'|'model'|'media'|'thumbnail'|'annotation'} resourceType
    */
   resolve(url, resourceType = 'asset') {
     if (!url || url.startsWith('blob:') || url.startsWith('data:')) {

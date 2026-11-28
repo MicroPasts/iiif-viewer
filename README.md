@@ -55,11 +55,12 @@ A framework-agnostic **IIIF Presentation API 2.x, 3.0 & 4.0** viewer built with 
 
 * **IIIF Presentation 2.x, 3.0 & 4.0 Support:** Detects and normalizes common Presentation 2.x (`sequences`/`canvases`), Presentation 3.0 (`items`/`AnnotationPage`), and Presentation 4.0 (`Scene`/`Model`/`SpecificResource`) structures. A Presentation 3 annotation page with painting annotations can also be loaded directly.
 * **Deep-Zoom 2D & Interactive 3D in One Filmstrip:** Switch between OpenSeadragon tiled/static 2D images and a Three.js WebGL 3D scene viewer (`GLTFLoader` + `DRACOLoader`). The 3D controls include camera presets and reset, auto-rotate, wireframe, raking light, model statistics, a local file picker, and IIIF `RotateTransform` / `ScaleTransform` / `TranslateTransform` support.
+* **Presentation 3 Audio and Video:** Play audio or video canvases using compact themed controls; the playback options menu provides volume, speed and embedded WebVTT captions. Navigate temporal fragments from Notes, Index and search results.
 * **Image Inspection & Annotations:** Zoom, rotate, and adjust brightness, contrast, grayscale, and inversion for 2D images. Image controls are hidden for 3D scenes and filter settings are retained when returning to 2D. The Notes panel displays embedded or referenced annotation text and can focus on supported rectangular `xywh` regions.
-* **Optional Side-by-Side Comparison:** Compare two canvases or 3D scenes, including across manifests, with synchronized 2D navigation and pane-aware information.
+* **Optional Side-by-Side Comparison:** Compare image, audio/video or 3D canvases, including across manifests, with synchronized 2D navigation and pane-aware information.
 * **Search & Navigation:** Browse thumbnails and nested ranges, or search through a supported IIIF Search API service with a local manifest search fallback. Manifest URLs or IIIF links can also be dropped onto the viewer.
 * **Maps & Languages:** Display manifest and current-canvas `navPlace` features on a MapLibre map. Choose among available metadata languages in the sidebar or set a preferred language programmatically.
-* **Configurable Proxy Routing:** Rewrite manifest, `info.json`, static image, model, thumbnail, annotation, search, and `navPlace` URLs through custom prefixes, regex rules, functions, or proxy endpoints via `proxyRoutes`, `proxyUrl`, and `assetProxyUrl`.
+* **Configurable Proxy Routing:** Rewrite manifest, `info.json`, static image, media, model, thumbnail, annotation, search, and `navPlace` URLs through custom prefixes, regex rules, functions, or proxy endpoints via `proxyRoutes`, `proxyUrl`, and `assetProxyUrl`.
 * **HTML Metadata Rendering:** Sanitizes HTML inside manifest metadata values, summaries, attributions, and annotations, retaining a limited set of formatting and links.
 * **Fullscreen & Scoped Dark/Light Themes:** Built-in Fullscreen API support (with a fixed-viewport fallback for sandboxed iframes) and isolated `.dark` class theming.
 
@@ -70,12 +71,14 @@ A framework-agnostic **IIIF Presentation API 2.x, 3.0 & 4.0** viewer built with 
 * Language maps prefer the selected language, then `none`, then the first available language. For Presentation 2 language-tagged arrays, the selected language is preferred; otherwise available values are combined.
 * The local 3D file picker works best with self-contained `.glb` files; a `.gltf` file that refers to separate buffers or textures also needs those resources to be accessible.
 * Draco-compressed models use decoders hosted by Google by default. Set `dracoDecoderPath` to a directory you host if external decoder requests are undesirable.
+* AV playback depends on browser codec support and the media server. Cross-origin WebVTT tracks require appropriate CORS headers on both media and caption responses; seeking generally requires byte-range support. Volume control and caption rendering depend on browser and device capabilities.
+* AV support plays the first recognized painting audio/video body, including a `Choice`; it does not compose multiple timed painting bodies or apply source/target temporal offsets. Embedded supplementing WebVTT bodies become caption tracks; referenced external annotation pages and other caption formats are not loaded as tracks. Temporal navigation accepts `t=start` or `t=start,end` in seconds or `HH:MM:SS`, optionally prefixed `npt:`. It seeks without autoplay or enforcing the fragment end.
 
 ### Sidebar
 
 * **Metadata:** View the manifest summary, metadata, attribution, rights, related links, and technical details. Long summaries can be expanded. The language selector is offered when multiple languages are found in the manifest label, summary, or metadata.
-* **Index:** Navigate supported structural ranges and nested ranges by selecting an entry.
-* **Notes:** Read annotations for the current canvas. Select **Zoom region** for supported `xywh` regions, or use **Hide Boxes** / **Show Boxes** to toggle their overlays. Referenced annotation pages are fetched when their canvas is opened.
+* **Index:** Navigate supported structural ranges and nested ranges by selecting an entry; temporal range targets seek AV canvases.
+* **Notes:** Read annotations for the current canvas. Select **Zoom region** for supported `xywh` regions or a time cue to seek an AV canvas; use **Hide Boxes** / **Show Boxes** to toggle image overlays. Referenced annotation pages are fetched when their canvas is opened.
 * **Search:** Search through a detected IIIF Search API service when available. If no service is detected or its request fails, search locally through manifest and canvas labels, metadata, and loaded annotations. Local search matches text without HTML formatting and does not fetch annotation pages from unvisited canvases; an empty response from a working remote service does not trigger a local search.
 * **Map:** View and select geographic locations from the manifest and current canvas.
 
@@ -383,7 +386,7 @@ onBeforeUnmount(() => viewer?.destroy());
 | :--- | :--- | :--- | :--- |
 | `manifestUrl` (or `url`) | `string` | `''` | URL of a IIIF Presentation 2.0, 3.0, or 4.0 manifest to fetch on mount. |
 | `manifest` (or `data`) | `object \| string` | `null` | Pre-loaded IIIF manifest JSON object or JSON string. |
-| `proxyRoutes` | `object \| array \| function` | `null` | Rewrites URLs of type `'manifest'`, `'image'`, `'model'`, `'thumbnail'`, `'annotation'`, `'search'`, or `'navplace'`. Accepts `{ prefix: replacement }`, `[{ match, replace, types }]` with string or `RegExp` matches, or `(url, resourceType) => string`. Array rule `types` is optional. |
+| `proxyRoutes` | `object \| array \| function` | `null` | Rewrites URLs of type `'manifest'`, `'image'`, `'media'`, `'model'`, `'thumbnail'`, `'annotation'`, `'search'`, or `'navplace'`. Accepts `{ prefix: replacement }`, `[{ match, replace, types }]` with string or `RegExp` matches, or `(url, resourceType) => string`. Array rule `types` is optional. |
 | `proxyUrl` | `string` | `''` | Prefix URL prepended to `encodeURIComponent(url)` when fetching manifests. |
 | `assetProxyUrl` | `string` | `''` | Prefix URL prepended to `encodeURIComponent(url)` for downstream resources when no `proxyRoutes` rule matches. |
 | `dracoDecoderPath` | `string` | Google CDN 1.5.7 | Path/URL to Draco WASM/JS decoders for Draco-compressed `.glb` models. |
@@ -442,9 +445,9 @@ const viewer = new IIIFViewer('#viewer', {
 
 Set `sideBySide: true` and select **Compare** to open a second pane. Open **Comparison settings** to choose a canvas or scene, swap panes, or, when `showUrlInput` is enabled, load a secondary manifest URL. The settings panel is non-modal; close it with its close button or Escape. Manifest requests use the configured manifest proxy and `fetchOptions`; images, models, annotations and maps use normal asset routing and require appropriate CORS permissions. **Use primary manifest** returns to the main resource. The filmstrip always controls the primary pane; focus or interact with a pane to make the Info panel follow it. The toolbar's zoom, rotation and filters apply to the active 2D pane. Ruler, measurement, curtain, downloads and permalinks remain bound to the primary pane.
 
-**Sync View** starts enabled for two 2D canvases and synchronizes normalized image centers and zoom relative to each image's home view. It can be unlocked and is unavailable for 3D scenes. Different aspect ratios, viewport constraints and rotations can still produce different visible regions; this is not image registration. The panes stack on narrow screens. **Swap Panes** exchanges canvases; when manifests differ it promotes the secondary manifest to primary and retains the former primary as secondary. Loading a new primary manifest or closing comparison disposes the secondary pane.
+**Sync View** starts enabled for two 2D canvases and synchronizes normalized image centers and zoom relative to each image's home view. It can be unlocked and is unavailable for 3D scenes or audio/video. Different aspect ratios, viewport constraints and rotations can still produce different visible regions; this is not image registration. The panes stack on narrow screens. **Swap Panes** exchanges canvases; when manifests differ it promotes the secondary manifest to primary and retains the former primary as secondary. Loading a new primary manifest or closing comparison disposes the secondary pane.
 
-The callback receives `{ open, activePane, secondaryManifest, secondaryManifestUrl, secondaryCanvasIndex, secondaryCanvas }`; secondary fields are `null` on close. Programmatic `enterSideBySide()` requires both the option and a loaded manifest. Unlike `layersCurtain`, this mode does not overlay or align image layers, and can compare 2D and 3D resources.
+The callback receives `{ open, activePane, secondaryManifest, secondaryManifestUrl, secondaryCanvasIndex, secondaryCanvas }`; secondary fields are `null` on close. Programmatic `enterSideBySide()` requires both the option and a loaded manifest. Unlike `layersCurtain`, this mode does not overlay or align image layers, and can compare 2D, AV and 3D resources.
 
 ### Persistent canvas orientation
 

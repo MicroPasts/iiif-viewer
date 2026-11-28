@@ -89,6 +89,7 @@ export function renderShell({ showUrlInput, allowManifestDrop = true, currentUrl
         <div data-el="primary-pane" class="relative min-w-0 min-h-0 bg-slate-100 dark:bg-slate-950 flex flex-col">
           <div data-el="osd-container" class="w-full h-full"></div>
           <div data-el="scene-container" class="hidden w-full h-full overflow-hidden"></div>
+          <div data-el="media-container" class="iiif-media-stage hidden"></div>
           <div id="${id}-inspection" data-el="inspection-tools" class="iiif-inspection-tools" hidden></div>
           <section id="${id}-download" data-el="download-panel" class="iiif-inspection-panel iiif-download-panel" aria-label="Download image" hidden></section>
 

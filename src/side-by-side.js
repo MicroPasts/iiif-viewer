@@ -2,6 +2,7 @@ import OpenSeadragon from 'openseadragon';
 import { OsdController } from './osd-controller.js';
 import { ManifestSearchController } from './search-controller.js';
 import { parseIIIFManifest, extractLangValue, parseAnnotationItems, normalizeNavPlace } from './parser.js';
+import { MediaStage } from './media-stage.js';
 
 export class SideBySide {
   constructor(viewer) {
@@ -29,6 +30,7 @@ export class SideBySide {
       <div class="iiif-compare-view relative flex-1 min-h-0 min-w-0">
         <div data-compare="osd" class="w-full h-full"></div>
         <div data-compare="scene" class="hidden w-full h-full overflow-hidden"></div>
+        <div data-compare="media" class="iiif-media-stage hidden"></div>
         <section id="${settingsId}" data-compare="settings-panel" class="iiif-compare-settings" aria-label="Comparison settings" hidden>
           <div class="iiif-compare-settings-heading">
             <strong>Comparison settings</strong>
@@ -59,7 +61,7 @@ export class SideBySide {
       },
     });
     const activatePrimary = (event) => {
-      if (event.target.closest('[data-el="osd-container"], [data-el="scene-container"]')) this.setActivePane('primary');
+      if (event.target.closest('[data-el="osd-container"], [data-el="scene-container"], [data-el="media-container"]')) this.setActivePane('primary');
     };
     this.primary.addEventListener('pointerdown', activatePrimary, { signal });
     this.primary.addEventListener('focusin', activatePrimary, { signal });
@@ -191,7 +193,7 @@ export class SideBySide {
     }
   }
 
-  selectCanvas(index, { focusRegion } = {}) {
+  selectCanvas(index, { focusRegion, temporal } = {}) {
     if (!Number.isInteger(index) || !this.manifest?.canvases[index]) return;
     const previous = this.manifest?.canvases[this.index];
     this.index = index;
@@ -206,7 +208,8 @@ export class SideBySide {
     select.value = String(index);
     if (previous !== item && !this.viewer.options.persistCanvasTransform) this.osd.resetTransform();
     this.host.querySelector('[data-compare="error"]').textContent = '';
-    this.renderCanvas(item, focusRegion);
+    if (previous === item && this.media && temporal) this.media.seek(temporal);
+    else this.renderCanvas(item, focusRegion, temporal);
     this.updateSync();
     this.viewer.syncActiveControls();
     this.viewer.renderSidebar();
@@ -249,10 +252,10 @@ export class SideBySide {
           }));
           if (signal.aborted) { item.externalAnnotationsLoaded = false; return; }
           item.annotations.push(...results.flat());
-          if (this.manifest === manifest && this.manifest.canvases[this.index] === item && item.kind !== 'scene') {
+          if (this.manifest === manifest && this.manifest.canvases[this.index] === item && item.kind === 'canvas') {
             this.osd.renderAnnotationOverlays(item.annotations.filter((annotation) => Array.isArray(annotation.xywh)));
           }
-          if (this.viewer.state.manifest === manifest && manifest.canvases[this.viewer.state.canvasIndex] === item && item.kind !== 'scene') {
+          if (this.viewer.state.manifest === manifest && manifest.canvases[this.viewer.state.canvasIndex] === item && item.kind === 'canvas') {
             this.viewer.osdController.renderAnnotationOverlays(item.annotations.filter((annotation) => Array.isArray(annotation.xywh)));
           }
         } catch (error) {
@@ -269,18 +272,27 @@ export class SideBySide {
     }
   }
 
-  async renderCanvas(item, focusRegion) {
+  async renderCanvas(item, focusRegion, temporal) {
     const generation = ++this.generation;
     this.modelStats = null;
     this.model?.destroy?.();
     this.model = null;
+    this.media?.destroy();
+    this.media = null;
     const scene = this.host.querySelector('[data-compare="scene"]');
     const osd = this.host.querySelector('[data-compare="osd"]');
+    const media = this.host.querySelector('[data-compare="media"]');
     scene.innerHTML = '';
     const isScene = item.kind === 'scene' && item.scene?.modelUrl;
     scene.classList.toggle('hidden', !isScene);
-    osd.classList.toggle('hidden', Boolean(isScene));
-    if (isScene) {
+    osd.classList.toggle('hidden', Boolean(isScene || item.kind === 'media'));
+    media.classList.toggle('hidden', item.kind !== 'media');
+    if (item.kind === 'media') {
+      this.osd.clearAnnotations();
+      this.osd.osd.close();
+      this.media = new MediaStage(media, item, (url, type) => this.viewer.resolveUrl(url, type));
+      if (temporal) this.media.seek(temporal);
+    } else if (isScene) {
       this.osd.clearAnnotations();
       const resolvedModelUrl = this.viewer.resolveUrl(item.scene.modelUrl, 'model');
       try {
@@ -410,6 +422,7 @@ export class SideBySide {
     this.osd.osd.removeHandler('open-failed', this.secondaryOpenFailed);
     this.osd.destroy();
     this.model?.destroy?.();
+    this.media?.destroy();
     this.host.replaceChildren();
     this.host.hidden = true;
     this.stage.classList.remove('is-comparing');

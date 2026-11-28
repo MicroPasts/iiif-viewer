@@ -21,6 +21,7 @@ import { SidebarResizer } from './sidebar-resizer.js';
 import { configureSidebarTabs } from './sidebar-tabs.js';
 import { SideBySide } from './side-by-side.js';
 import { activeElement } from './focus.js';
+import { MediaStage } from './media-stage.js';
 
 function extractDroppedManifestUrl(dataTransfer) {
   if (!dataTransfer) return null;
@@ -233,12 +234,16 @@ export class IIIFViewer {
         }
         this.renderSidebar();
       },
-      onSelectCanvas: (idx) => this.goToActiveCanvas(idx),
+      onSelectCanvas: (idx, options) => this.goToActiveCanvas(idx, options),
       onFocusAnnotation: (annoIdx) => {
         const { manifest, index, controller } = this.getActivePane();
         const current = manifest?.canvases[index];
         const anno = current?.annotations?.[annoIdx];
-        if (anno) controller.focusAnnotation(anno);
+        if (anno?.temporal) {
+          const targetId = typeof anno.target === 'string' ? anno.target.split('#')[0] : '';
+          const targetIndex = manifest.canvases.findIndex((canvas) => canvas.id.split('#')[0] === targetId);
+          this.goToActiveCanvas(targetIndex < 0 ? index : targetIndex, { temporal: anno.temporal });
+        } else if (anno) controller.focusAnnotation(anno);
       },
       onToggleAnnotations: (visible) => this.getActivePane().controller.setAnnotationsVisible(visible),
       onChangeLanguage: (lang) => this.setLanguage(lang),
@@ -247,7 +252,7 @@ export class IIIFViewer {
         const { manifest, search } = this.getActivePane();
         return search.search(q, manifest);
       },
-      onSelectSearchHit: (hit) => this.goToActiveCanvas(hit.canvasIndex, { focusRegion: hit.xywh }),
+      onSelectSearchHit: (hit) => this.goToActiveCanvas(hit.canvasIndex, { focusRegion: hit.xywh, temporal: hit.temporal }),
       onMountMap: (hostEl, featureCollection) => this.mountNavMap(hostEl, featureCollection),
       onPanMap: (x, y) => this.activeNavMap?.panBy(x, y),
       onFocusMapFeature: (feat) => {
@@ -495,7 +500,11 @@ export class IIIFViewer {
 
   syncActiveControls() {
     const { manifest, index } = this.getActivePane();
-    const isScene = manifest?.canvases[index]?.kind === 'scene';
+    const isScene = manifest?.canvases[index] && manifest.canvases[index].kind !== 'canvas';
+    const inspectionToolbar = this.wrapper.querySelector('[data-el="inspection-buttons"]');
+    if (inspectionToolbar && this.inspectionTools) {
+      inspectionToolbar.hidden = Boolean(isScene) || this.inspectionTools.host.hidden;
+    }
     const controls = this.wrapper.querySelector('[data-el="zoom-controls"]');
     controls?.classList.toggle('hidden', Boolean(isScene));
     controls?.classList.toggle('inline-flex', !isScene);
@@ -584,7 +593,7 @@ export class IIIFViewer {
     if (!this.options.permalink) throw new Error('Permalinks are not enabled for this viewer.');
     const canvas = this.state.manifest?.canvases[this.state.canvasIndex];
     if (!canvas) throw new Error('Load a manifest before sharing.');
-    if (canvas.kind !== 'canvas') throw new Error('Sharing a 3D scene view is not supported.');
+    if (canvas.kind !== 'canvas') throw new Error('Sharing a non-image view is not supported.');
     if (!this.manifestSourceUrl) throw new Error('This manifest was not loaded from a shareable URL.');
     const { rotation, flipHorizontal, flipVertical } = this.osdController.transform;
     if (![0, 90, 180, 270].includes(rotation)) throw new Error('Only right-angle rotations can be shared.');
@@ -792,7 +801,7 @@ export class IIIFViewer {
     this.activeNavMap = null;
   }
 
-  async goToCanvas(index, { focusRegion, exactRegion } = {}) {
+  async goToCanvas(index, { focusRegion, exactRegion, temporal } = {}) {
     const manifest = this.state.manifest;
     if (!manifest || index < 0 || index >= manifest.canvases.length) return;
 
@@ -810,10 +819,30 @@ export class IIIFViewer {
 
     const osdEl = this.wrapper.querySelector('[data-el="osd-container"]');
     const sceneEl = this.wrapper.querySelector('[data-el="scene-container"]');
+    const mediaEl = this.wrapper.querySelector('[data-el="media-container"]');
     const zoomControls = this.wrapper.querySelector('[data-el="zoom-controls"]');
     const filterBar = this.wrapper.querySelector('[data-el="filter-bar"]');
 
-    if (item.kind === 'scene' && item.scene?.modelUrl) {
+    if (this.activeMedia && this.mediaCanvas === item && temporal) {
+      this.activeMedia.seek(temporal);
+      this.renderSidebar();
+      return;
+    }
+    this.destroyMedia();
+    mediaEl.classList.add('hidden');
+    if (item.kind === 'media') {
+      this.destroySceneViewer();
+      this.osdController.clearAnnotations();
+      this.osdController.osd?.close();
+      osdEl.classList.add('hidden');
+      sceneEl.classList.add('hidden');
+      mediaEl.classList.remove('hidden');
+      this.activeMedia = new MediaStage(mediaEl, item, (url, type) => this.resolveUrl(url, type));
+      this.mediaCanvas = item;
+      if (temporal) this.activeMedia.seek(temporal);
+      const focusedControl = zoomControls?.contains(activeElement(this.wrapper)) || filterBar?.contains(activeElement(this.wrapper));
+      if (focusedControl) this.wrapper.querySelector('[data-el="viewer-root"]')?.focus();
+    } else if (item.kind === 'scene' && item.scene?.modelUrl) {
       this.osdController.clearAnnotations();
       const focusedControl = zoomControls?.contains(activeElement(this.wrapper)) ||
         filterBar?.contains(activeElement(this.wrapper));
@@ -902,12 +931,12 @@ export class IIIFViewer {
         item.annotations.push(...newAnnos);
         if (this.state.manifest?.canvases[this.state.canvasIndex] === item) {
           const boxed = item.annotations.filter((a) => Array.isArray(a.xywh) && a.xywh.length === 4);
-          if (boxed.length && item.kind !== 'scene' && (item.image.infoJsonUrl || item.image.staticUrl)) {
+          if (boxed.length && item.kind === 'canvas' && (item.image.infoJsonUrl || item.image.staticUrl)) {
             this.osdController.renderAnnotationOverlays(boxed);
           }
           this.renderSidebar();
         }
-        if (this.comparison?.manifest?.canvases[this.comparison.index] === item && item.kind !== 'scene') {
+        if (this.comparison?.manifest?.canvases[this.comparison.index] === item && item.kind === 'canvas') {
           this.comparison.osd.renderAnnotationOverlays(item.annotations.filter((a) => Array.isArray(a.xywh) && a.xywh.length === 4));
           this.renderSidebar();
         }
@@ -951,6 +980,12 @@ export class IIIFViewer {
     });
   }
 
+  destroyMedia() {
+    this.activeMedia?.destroy();
+    this.activeMedia = null;
+    this.mediaCanvas = null;
+  }
+
   destroySceneViewer() {
     this.sceneGeneration = (this.sceneGeneration || 0) + 1;
     this.activeModelViewer?.destroy?.();
@@ -971,6 +1006,7 @@ export class IIIFViewer {
       modelStats: this.comparison?.activePane === 'secondary' ? this.comparison.modelStats : this.state.modelStats,
       hasRemoteSearch: search.hasRemoteSearch(),
       navFeatures: this.collectNavFeatures(manifest, currentCanvas),
+      temporal: (this.comparison?.activePane === 'secondary' ? this.comparison.media : this.activeMedia)?.fragment || null,
     });
   }
 
@@ -1009,6 +1045,7 @@ export class IIIFViewer {
     this.searchController?.destroy();
     this.fullscreen?.destroy();
     this.destroyNavMap();
+    this.destroyMedia();
     this.destroySceneViewer();
     this.inspectionTools?.destroy();
     this.jsonInspector?.destroy();
