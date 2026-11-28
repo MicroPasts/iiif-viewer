@@ -127,6 +127,7 @@ export class ManifestSearchController {
         canvasLabel: canvas?.label || `Canvas ${resolvedCanvasIndex + 1}`,
         text: snippet,
         xywh: anno.xywh,
+        temporal: anno.temporal,
         source: 'iiif-search',
       }];
     });
@@ -182,6 +183,7 @@ export class ManifestSearchController {
           canvasLabel: canvas.label,
           text: searchText(anno.text).slice(0, 180),
           xywh: anno.xywh,
+          temporal: anno.temporal,
           source: 'local',
         });
       }

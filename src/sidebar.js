@@ -1,5 +1,6 @@
 import { escapeHtml, getPlainText, sanitizeHtml } from './sanitize.js';
 import { activeElement } from './focus.js';
+import { formatTime } from './temporal.js';
 
 const defaultExternalViewers = [
   { label: 'Universal Viewer', url: 'https://www.universalviewer.dev/#?iiifManifestId={manifest}' },
@@ -164,7 +165,10 @@ export class SidebarPanel {
 
       const canvasBtn = e.target.closest('[data-canvas-index]');
       if (canvasBtn) {
-        this.onSelectCanvas(parseInt(canvasBtn.dataset.canvasIndex, 10));
+        const start = canvasBtn.dataset.timeStart;
+        const end = canvasBtn.dataset.timeEnd;
+        this.onSelectCanvas(parseInt(canvasBtn.dataset.canvasIndex, 10),
+          start === undefined ? undefined : { temporal: { start: Number(start), end: end === '' ? null : Number(end) } });
         return;
       }
 
@@ -278,7 +282,7 @@ export class SidebarPanel {
   render(
     manifest,
     currentCanvas,
-    { manifestUrl = '', modelStats = null, hasRemoteSearch = false, navFeatures = [] } = {}
+    { manifestUrl = '', modelStats = null, hasRemoteSearch = false, navFeatures = [], temporal = null } = {}
   ) {
     const container = this.wrapper.querySelector('[data-el="sidebar-content"]');
     if (!container || !manifest) return;
@@ -306,9 +310,9 @@ export class SidebarPanel {
     if (this.activeTab === 'metadata') {
       container.innerHTML = this.renderMetadataTab(manifest, currentCanvas, manifestUrl, modelStats);
     } else if (this.activeTab === 'structures') {
-      container.innerHTML = this.renderStructuresTab(manifest.structures, currentCanvas?.index ?? 0);
+      container.innerHTML = this.renderStructuresTab(manifest.structures, currentCanvas?.index ?? 0, temporal);
     } else if (this.activeTab === 'annotations') {
-      container.innerHTML = this.renderAnnotationsTab(currentCanvas);
+      container.innerHTML = this.renderAnnotationsTab(currentCanvas, temporal);
     } else if (this.activeTab === 'search') {
       container.innerHTML = this.buildSearchTabHtml();
     } else if (this.activeTab === 'map') {
@@ -594,6 +598,8 @@ export class SidebarPanel {
                   ${
                     currentCanvas.kind === 'scene'
                       ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300">GLB / 3D</span>`
+                      : currentCanvas.kind === 'media'
+                        ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300">${currentCanvas.media.type === 'video' ? 'VIDEO' : 'AUDIO'}${currentCanvas.media.duration !== null ? ` &bull; ${formatTime(currentCanvas.media.duration)}` : ''}</span>`
                       : ''
                   }
                 </div>
@@ -634,7 +640,7 @@ export class SidebarPanel {
     `;
   }
 
-  renderStructuresTab(structures, activeCanvasIndex) {
+  renderStructuresTab(structures, activeCanvasIndex, temporal = null) {
     if (!structures.length) {
       return `<p class="text-slate-500 dark:text-slate-400 italic">This manifest does not define structural ranges or a table of contents.</p>`;
     }
@@ -642,13 +648,15 @@ export class SidebarPanel {
     const renderNodes = (nodes, depth = 0) =>
       nodes
         .map((s) => {
-          const isCurrent = s.canvasIndex === activeCanvasIndex;
+          const isCurrent = s.canvasIndex === activeCanvasIndex &&
+            (!s.temporal || (temporal?.start === s.temporal.start && temporal?.end === s.temporal.end));
           const padLeft = 10 + depth * 14;
           const childHtml = s.children?.length ? renderNodes(s.children, depth + 1) : '';
           return `
             <button
               type="button"
               data-canvas-index="${s.canvasIndex}"
+              ${s.temporal ? `data-time-start="${s.temporal.start}" data-time-end="${s.temporal.end ?? ''}"` : ''}
               ${isCurrent ? 'aria-current="true"' : ''}
               style="padding-left: ${padLeft}px;"
               class="w-full text-left pr-2.5 py-2 rounded-md transition flex items-center justify-between gap-2 ${
@@ -658,7 +666,7 @@ export class SidebarPanel {
               }"
             >
               <span class="truncate">${depth > 0 ? '&rdsh; ' : ''}${escapeHtml(s.label)}</span>
-              <span class="text-[10px] font-mono shrink-0">p.${s.canvasIndex + 1}</span>
+              <span class="text-[10px] font-mono shrink-0">p.${s.canvasIndex + 1}${s.temporal ? ` &bull; ${formatTime(s.temporal.start)}` : ''}</span>
             </button>
             ${childHtml}`;
         })
@@ -667,7 +675,7 @@ export class SidebarPanel {
     return `<div class="space-y-1">${renderNodes(structures)}</div>`;
   }
 
-  renderAnnotationsTab(currentCanvas) {
+  renderAnnotationsTab(currentCanvas, temporal = null) {
     const annos = currentCanvas?.annotations || [];
     if (!annos.length) {
       return `<p class="text-slate-500 dark:text-slate-400 italic">No transcriptions or annotations attached to this canvas.</p>`;
@@ -695,7 +703,9 @@ export class SidebarPanel {
                   ${escapeHtml(a.motivation)}
                 </span>
                 ${
-                  a.xywh
+                  a.temporal
+                    ? `<button type="button" data-anno-focus="${idx}" ${temporal?.start === a.temporal.start && temporal?.end === a.temporal.end ? 'aria-current="true"' : ''} class="text-[10px] font-mono text-purple-600 dark:text-purple-400 hover:underline">Go to ${formatTime(a.temporal.start)}${a.temporal.end === null ? '' : `–${formatTime(a.temporal.end)}`}</button>`
+                    : a.xywh
                     ? `<button type="button" data-anno-focus="${idx}" title="Zoom to region on canvas" class="text-[10px] font-mono text-purple-600 dark:text-purple-400 hover:underline">
                         Zoom region &rarr;
                       </button>`

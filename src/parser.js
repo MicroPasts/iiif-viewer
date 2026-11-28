@@ -1,3 +1,5 @@
+import { parseTemporalFragment } from './temporal.js';
+
 export function extractLangValue(val, preferredLang = 'en') {
   if (!val) return '';
   if (typeof val === 'string') return val;
@@ -223,6 +225,36 @@ function canvasPaintingAnnotations(canvas, isV3) {
     : canvas.images || [];
 }
 
+function normalizeMedia(canvas, preferredLang) {
+  const expand = (body) => {
+    if (!body) return [];
+    if (Array.isArray(body)) return body.flatMap(expand);
+    if (body.type === 'Choice') return (body.items || []).flatMap(expand);
+    if (body.type === 'SpecificResource') return expand(body.source);
+    return [body];
+  };
+  const bodies = canvasPaintingAnnotations(canvas, true).flatMap((annotation) => expand(annotation.body));
+  const body = bodies.find((candidate) => candidate.type === 'Video' || candidate.type === 'Audio' ||
+    /^(video|audio)\//i.test(candidate.format || ''));
+  if (!body) return null;
+  const type = body.type === 'Audio' ? 'audio' : body.type === 'Video' ? 'video' :
+    /^audio\//i.test(body.format || '') ? 'audio' : 'video';
+  const tracks = (canvas.annotations || []).flatMap((page) => page.items || [])
+    .filter((annotation) => annotation.motivation === 'supplementing' || annotation.motivation?.includes?.('supplementing'))
+    .flatMap((annotation) => expand(annotation.body))
+    .filter((track) => track.id && /^(text\/vtt)(?:;|$)/i.test(track.format || ''))
+    .map((track) => ({
+      url: track.id,
+      label: extractLangValue(track.label, preferredLang) || 'Captions',
+      language: Array.isArray(track.language) ? track.language[0] : track.language || '',
+    }));
+  return {
+    type, url: body.id || body['@id'] || null, format: body.format || '',
+    duration: Number.isFinite(canvas.duration) ? canvas.duration : Number.isFinite(body.duration) ? body.duration : null,
+    poster: extractItemThumbnail(canvas) || extractItemThumbnail(body), tracks,
+  };
+}
+
 function normalizeCanvasLayers(canvas, isV3, preferredLang) {
   const annotations = canvasPaintingAnnotations(canvas, isV3);
   const layers = [];
@@ -393,10 +425,9 @@ export function parseAnnotationItems(items = [], isV3 = true) {
         .filter(Boolean)
         .join(' ');
       if (text) {
-        const targetStr =
-          typeof anno.target === 'string'
-            ? anno.target
-            : anno.target?.id || anno.target?.source || '';
+        const source = anno.target?.source;
+        const targetStr = typeof anno.target === 'string' ? anno.target :
+          anno.target?.id || (typeof source === 'string' ? source : source?.id || source?.['@id']) || '';
         const selectorVal = anno.target?.selector?.value || targetStr;
         const xywhMatch = String(selectorVal).match(/xywh=(?:pixel:)?([0-9,.-]+)/);
         results.push({
@@ -407,6 +438,7 @@ export function parseAnnotationItems(items = [], isV3 = true) {
           text,
           target: targetStr,
           xywh: xywhMatch ? xywhMatch[1].split(',').map(Number) : null,
+          temporal: parseTemporalFragment(String(selectorVal)),
         });
       }
     });
@@ -464,23 +496,24 @@ function buildStructureTree(rawStructures, isV3, canvasIndexById, preferredLang)
     if (id) rangeMap.set(id, r);
   });
 
-  const resolveCanvasIndex = (range, ancestors = new Set()) => {
+  const resolveCanvasTarget = (range, ancestors = new Set()) => {
     if (ancestors.has(range)) return null;
     const visited = new Set(ancestors);
     visited.add(range);
     const targets = isV3 ? range.items || [] : range.canvases || [];
 
     for (const target of targets) {
-      const id = typeof target === 'string' ? target : target?.id || target?.['@id'] || '';
+      const source = target?.source;
+      const id = typeof target === 'string' ? target : target?.id || target?.['@id'] || (typeof source === 'string' ? source : source?.id) || '';
       const cleanId = id.split('#')[0];
       if (canvasIndexById.has(cleanId)) {
-        return canvasIndexById.get(cleanId);
+        return { canvasIndex: canvasIndexById.get(cleanId), temporal: parseTemporalFragment(target?.selector?.value || id) };
       }
       const embeddedRange = target?.type === 'Range' && Array.isArray(target.items) ? target : null;
       const nestedRange = embeddedRange || rangeMap.get(cleanId);
       if (nestedRange) {
-        const nestedIdx = resolveCanvasIndex(nestedRange, visited);
-        if (nestedIdx !== null) return nestedIdx;
+        const nestedTarget = resolveCanvasTarget(nestedRange, visited);
+        if (nestedTarget !== null) return nestedTarget;
       }
     }
     return null;
@@ -522,14 +555,15 @@ function buildStructureTree(rawStructures, isV3, canvasIndexById, preferredLang)
       })
       .filter(Boolean);
 
-    const canvasIndex = resolveCanvasIndex(range);
-    if (canvasIndex === null && children.length === 0) return null;
+    const target = resolveCanvasTarget(range);
+    if (target === null && children.length === 0) return null;
 
     return {
       id,
       rawLabel: range.label,
       label: extractLangValue(range.label, preferredLang) || 'Section',
-      canvasIndex: canvasIndex ?? children[0]?.canvasIndex ?? 0,
+      canvasIndex: target?.canvasIndex ?? children[0]?.canvasIndex ?? 0,
+      temporal: target?.temporal ?? children[0]?.temporal ?? null,
       children,
     };
   };
@@ -676,6 +710,17 @@ export function parseIIIFManifest(manifest, preferredLang = 'en') {
                 navPlaceRefUrl: canvasNav.refUrl,
                 navPlaceLoaded: !canvasNav.refUrl,
                 metadata: canvasMeta,
+              };
+            }
+
+            const media = isV3 ? normalizeMedia(c, preferredLang) : null;
+            if (media) {
+              return {
+                index, kind: 'media', id: itemId, rawLabel: c.label, label: canvasLabel, media,
+                image: { thumbnail: media.poster, width: c.width || null, height: c.height || null },
+                scene: null, annotations, externalAnnotationUrls, externalAnnotationsLoaded: false,
+                navPlace: canvasNav.featureCollection, navPlaceRefUrl: canvasNav.refUrl,
+                navPlaceLoaded: !canvasNav.refUrl, metadata: canvasMeta,
               };
             }
 

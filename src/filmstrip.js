@@ -33,7 +33,7 @@ export class Filmstrip {
           type="button"
           data-canvas-index="${c.index}"
           title="${escapeHtml(c.label)}"
-          aria-label="${escapeHtml(c.label)}, ${c.kind === 'scene' ? '3D scene' : 'canvas'} ${c.index + 1}"
+          aria-label="${escapeHtml(c.label)}, ${c.kind === 'scene' ? '3D scene' : c.kind === 'media' ? c.media.type : 'canvas'} ${c.index + 1}"
           class="group relative h-18 w-16 shrink-0 rounded-md overflow-hidden border-2 border-transparent bg-slate-200 dark:bg-slate-800 transition focus:outline-hidden"
         >
           ${
@@ -44,7 +44,7 @@ export class Filmstrip {
           ${
             c.kind === 'scene'
               ? `<span class="absolute top-1 right-1 px-1 rounded bg-amber-500 text-slate-950 text-[8px] font-bold">3D</span>`
-              : ''
+              : c.kind === 'media' ? `<span class="absolute top-1 right-1 px-1 rounded bg-amber-500 text-slate-950 text-[8px] font-bold">${c.media.type === 'audio' ? 'AUDIO' : 'VIDEO'}</span>` : ''
           }
           <span class="absolute bottom-0 inset-x-0 bg-slate-950/75 text-white text-[9px] font-mono px-1 truncate">
             ${c.index + 1}
